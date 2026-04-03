@@ -14,34 +14,41 @@ class MarketListScreen extends ConsumerWidget {
     final marketItems = ref.watch(marketListProvider);
     return AppScaffold(
       title: 'Markets',
-      child: ListView.separated(
-        itemCount: marketItems.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 16),
-        itemBuilder: (_, index) {
-          final market = marketItems[index];
-          return InkWell(
-            onTap: () => context.go('/markets/detail'),
-            child: GlassCard(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(market.category, style: TextStyle(color: Colors.white.withOpacity(0.6))),
-                        const SizedBox(height: 10),
-                        Text(market.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                      ],
+      child: marketItems.when(
+        data: (items) => ListView.separated(
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          itemBuilder: (_, index) {
+            final market = items[index];
+            return InkWell(
+              onTap: () {
+                ref.read(selectedMarketIndexProvider.notifier).state = index;
+                context.go('/markets/detail');
+              },
+              child: GlassCard(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(market.category, style: TextStyle(color: Colors.white.withOpacity(0.6))),
+                          const SizedBox(height: 10),
+                          Text(market.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
                     ),
-                  ),
-                  Text('${(market.yesProbability * 100).round()}% YES'),
-                  const SizedBox(width: 18),
-                  FilledButton(onPressed: () => context.go('/trade'), child: const Text('Trade')),
-                ],
+                    Text('${(market.yesProbability * 100).round()}% YES'),
+                    const SizedBox(width: 18),
+                    FilledButton(onPressed: () => context.go('/trade'), child: const Text('Trade')),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text(error.toString())),
       ),
     );
   }

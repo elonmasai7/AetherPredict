@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/providers.dart';
 import '../../widgets/glass_card.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final wallet = ref.watch(walletSessionProvider);
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -45,9 +48,18 @@ class LoginScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton(
-                    onPressed: () => context.go('/dashboard'),
-                    child: const Text('Connect Wallet'),
+                    onPressed: () async {
+                      await ref.read(walletSessionProvider.notifier).connect();
+                      if (context.mounted) {
+                        context.go('/dashboard');
+                      }
+                    },
+                    child: Text(wallet.connected ? 'Wallet Connected' : 'Connect Wallet'),
                   ),
+                  if (wallet.error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(wallet.error!, style: const TextStyle(color: Colors.redAccent)),
+                  ],
                 ],
               ),
             ),

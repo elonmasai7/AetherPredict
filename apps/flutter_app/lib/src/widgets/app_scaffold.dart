@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class AppScaffold extends StatelessWidget {
+import '../core/providers.dart';
+
+class AppScaffold extends ConsumerWidget {
   const AppScaffold({
     super.key,
     required this.title,
@@ -12,8 +15,9 @@ class AppScaffold extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final compact = MediaQuery.of(context).size.width < 900;
+    final wallet = ref.watch(walletSessionProvider);
     final items = const [
       ('Dashboard', '/dashboard'),
       ('Markets', '/markets'),
@@ -77,7 +81,7 @@ class AppScaffold extends StatelessWidget {
                               color: Colors.white.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(18),
                             ),
-                            child: const Text('Wallet connected'),
+                            child: Text(wallet.connected ? (wallet.address ?? 'Wallet connected') : 'Wallet offline'),
                           ),
                         ],
                       ),

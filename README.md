@@ -37,11 +37,22 @@ AetherPredict is a production-oriented decentralized prediction market platform 
 5. Flutter app:
    - `cd apps/flutter_app`
    - `flutter pub get`
-   - `flutter run -d chrome`
+   - `flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000 --dart-define=WS_MARKETS_URL=ws://localhost:8000/ws/markets --dart-define=WALLETCONNECT_PROJECT_ID=your_project_id`
 6. Contracts:
    - `cd apps/contracts`
    - `forge install`
    - `forge test`
+
+## Database and migrations
+
+- Initialize schema with `cd apps/backend && alembic upgrade head`
+- The backend also seeds demo-ready live data at startup if the tables are empty
+- Redis is used for market update pub/sub and websocket fanout on `/ws/markets`
+
+## HashKey deployment envs
+
+- Set `HASHKEY_RPC_URL`, `HASHKEY_CHAIN_ID`, `HASHKEY_PRIVATE_KEY`, and `TREASURY_ADDRESS`
+- Optional deployment metadata fields are included in `.env.example` for explorer and deployed contract addresses
 
 ## Deployment targets
 

@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 
 class PositionResponse(BaseModel):
+    market_id: int
     market_title: str
     side: str
     size: float

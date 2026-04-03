@@ -14,6 +14,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     wallet_address: Mapped[str | None] = mapped_column(String(120), nullable=True)
     role: Mapped[str] = mapped_column(String(50), default="user")
+    wallet_nonce: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -62,6 +63,7 @@ class AgentStatus(Base):
     interventions: Mapped[int] = mapped_column(Integer, default=0)
     pnl: Mapped[float] = mapped_column(Float, default=0)
     summary: Mapped[str] = mapped_column(Text)
+    active_trades: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Dispute(Base):
@@ -72,3 +74,5 @@ class Dispute(Base):
     status: Mapped[str] = mapped_column(String(40), default="OPEN")
     evidence_url: Mapped[str] = mapped_column(String(255))
     ai_summary: Mapped[str] = mapped_column(Text)
+    juror_votes_yes: Mapped[int] = mapped_column(Integer, default=0)
+    juror_votes_no: Mapped[int] = mapped_column(Integer, default=0)

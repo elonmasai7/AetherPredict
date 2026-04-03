@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
     ai_service_url: str = "http://localhost:8010"
+    hashkey_rpc_url: str = ""
+    hashkey_chain_id: int = 133
+    hashkey_private_key: str = ""
+    treasury_address: str = ""
+    websocket_channel: str = "aetherpredict:market_updates"
+    walletconnect_project_id: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
