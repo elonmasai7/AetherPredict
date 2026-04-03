@@ -1,0 +1,51 @@
+# AetherPredict
+
+AetherPredict is a production-oriented decentralized prediction market platform built with Flutter, FastAPI, AI services, and Solidity on HashKey Chain.
+
+## Architecture
+
+- `apps/flutter_app`: single Flutter codebase for web, Android, and iOS
+- `apps/backend`: FastAPI backend with PostgreSQL, Redis, JWT auth, REST APIs, and WebSocket streaming
+- `apps/ai-service`: FastAPI AI microservice for resolution, sentiment, probability updates, and anomaly detection
+- `apps/contracts`: Foundry workspace for Solidity contracts and deployment scripts
+- `infra/docker`: container definitions and runtime assets
+
+## Core capabilities
+
+- Create and trade on-chain YES/NO markets
+- Stream live probabilities and AI confidence updates
+- Monitor autonomous liquidity and sentinel agents
+- Submit disputes and review evidence
+- Connect wallets via WalletConnect
+- Support responsive web and native mobile experiences from one Flutter app
+
+## Quick start
+
+1. Copy `.env.example` to `.env`
+2. Start infrastructure:
+   - `docker compose up -d`
+3. Backend:
+   - `cd apps/backend`
+   - `python -m venv .venv`
+   - `pip install -r requirements.txt`
+   - `uvicorn app.main:app --reload --port 8000`
+4. AI service:
+   - `cd apps/ai-service`
+   - `python -m venv .venv`
+   - `pip install -r requirements.txt`
+   - `uvicorn app.main:app --reload --port 8010`
+5. Flutter app:
+   - `cd apps/flutter_app`
+   - `flutter pub get`
+   - `flutter run -d chrome`
+6. Contracts:
+   - `cd apps/contracts`
+   - `forge install`
+   - `forge test`
+
+## Deployment targets
+
+- Flutter web build for static hosting or CDN-backed edge deployment
+- FastAPI services on Render, Railway, Fly.io, or container platforms
+- PostgreSQL and Redis as managed services
+- Foundry deployment scripts for HashKey Chain testnet and mainnet

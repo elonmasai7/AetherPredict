@@ -1,0 +1,44 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aetherpredict
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env.example
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  ai-service:
+    build:
+      context: ./apps/ai-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env.example
+    ports:
+      - "8010:8010"
+
+volumes:
+  postgres_data:
