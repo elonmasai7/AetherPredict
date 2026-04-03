@@ -28,12 +28,13 @@ AetherPredict is a production-oriented decentralized prediction market platform 
    - `cd apps/backend`
    - `python -m venv .venv`
    - `pip install -r requirements.txt`
+   - `python -m alembic upgrade head`
    - `uvicorn app.main:app --reload --port 8000`
 4. AI service:
    - `cd apps/ai-service`
-   - `python -m venv .venv`
-   - `pip install -r requirements.txt`
-   - `uvicorn app.main:app --reload --port 8010`
+   - `py -3.12 -m venv .venv312`
+   - `.venv312\\Scripts\\python -m pip install -r requirements.txt`
+   - `.venv312\\Scripts\\python -m uvicorn app.main:app --reload --port 8010`
 5. Flutter app:
    - `cd apps/flutter_app`
    - `flutter pub get`
@@ -46,8 +47,15 @@ AetherPredict is a production-oriented decentralized prediction market platform 
 ## Database and migrations
 
 - Initialize schema with `cd apps/backend && alembic upgrade head`
-- The backend also seeds demo-ready live data at startup if the tables are empty
+- The backend seeds demo-ready live data at startup only after migrated tables exist
 - Redis is used for market update pub/sub and websocket fanout on `/ws/markets`
+- Backend startup now fails fast if Alembic migrations have not been applied
+
+## Local verification
+
+- Verified backend import: `AetherPredict API`
+- Verified AI service import in `apps/ai-service/.venv312`: `AetherPredict AI Service`
+- If `docker compose up -d postgres redis` fails on Windows, start Docker Desktop first so the Linux engine pipe is available
 
 ## HashKey deployment envs
 

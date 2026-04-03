@@ -2,10 +2,11 @@ import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect
 
 from app.api import agents, ai, auth, disputes, markets, notifications, portfolio, ws
 from app.core.config import settings
-from app.db.session import Base, engine, SessionLocal
+from app.db.session import engine, SessionLocal
 from app.services.bootstrap import seed_demo_data
 from app.services.redis_bus import market_feed_worker
 
@@ -34,7 +35,15 @@ stream_task: asyncio.Task | None = None
 @app.on_event("startup")
 async def startup() -> None:
     global stream_task
-    Base.metadata.create_all(bind=engine)
+    inspector = inspect(engine)
+    required_tables = {"users", "markets", "portfolio_positions", "agent_statuses", "disputes"}
+    existing_tables = set(inspector.get_table_names())
+    missing_tables = sorted(required_tables - existing_tables)
+    if missing_tables:
+        joined = ", ".join(missing_tables)
+        raise RuntimeError(
+            f"Database schema is missing tables: {joined}. Run 'alembic upgrade head' from apps/backend before starting the API."
+        )
     db = SessionLocal()
     try:
         seed_demo_data(db)
