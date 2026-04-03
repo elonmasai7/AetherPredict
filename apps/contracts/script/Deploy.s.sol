@@ -5,6 +5,8 @@ import {Script} from "forge-std/Script.sol";
 import {MarketFactory} from "../src/MarketFactory.sol";
 import {TreasuryVault} from "../src/TreasuryVault.sol";
 import {ReputationStaking} from "../src/ReputationStaking.sol";
+import {BundleVault} from "../src/BundleVault.sol";
+import {InsurancePool} from "../src/InsurancePool.sol";
 
 contract DeployAetherPredict is Script {
     function run() external {
@@ -14,10 +16,14 @@ contract DeployAetherPredict is Script {
         TreasuryVault treasury = new TreasuryVault(msg.sender);
         ReputationStaking reputation = new ReputationStaking(msg.sender);
         MarketFactory factory = new MarketFactory(msg.sender, 0.01 ether);
+        BundleVault bundleVault = new BundleVault(msg.sender);
+        InsurancePool insurancePool = new InsurancePool(msg.sender);
 
         treasury;
         reputation;
         factory;
+        bundleVault;
+        insurancePool;
 
         vm.stopBroadcast();
     }

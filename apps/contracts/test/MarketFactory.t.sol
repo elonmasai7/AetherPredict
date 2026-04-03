@@ -7,6 +7,7 @@ import {PredictionMarket} from "../src/PredictionMarket.sol";
 
 contract MarketFactoryTest is Test {
     MarketFactory internal factory;
+    address internal trader = address(0xBEEF);
 
     function setUp() public {
         factory = new MarketFactory(address(this), 0.01 ether);
@@ -34,14 +35,14 @@ contract MarketFactoryTest is Test {
 
         PredictionMarket market = PredictionMarket(payable(marketAddress));
 
-        vm.deal(address(1), 2 ether);
-        vm.prank(address(1));
+        vm.deal(trader, 2 ether);
+        vm.prank(trader);
         market.buy_yes{value: 1 ether}();
 
         vm.warp(block.timestamp + 2 days);
         market.resolve_market(true, 9100);
 
-        vm.prank(address(1));
+        vm.prank(trader);
         market.claim_rewards();
     }
 }

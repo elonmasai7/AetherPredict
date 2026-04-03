@@ -14,6 +14,8 @@ class DashboardScreen extends ConsumerWidget {
     final marketItems = ref.watch(marketListProvider);
     final agentItems = ref.watch(agentListProvider);
     final liveUpdate = ref.watch(marketUpdatesProvider);
+    final notifications = ref.watch(notificationsProvider);
+    final sentiment = ref.watch(sentimentFeedProvider);
 
     return AppScaffold(
       title: 'Command Center',
@@ -73,6 +75,56 @@ class DashboardScreen extends ConsumerWidget {
                               padding: const EdgeInsets.only(bottom: 14),
                               child: Text('${agent.name}: ${agent.status}  |  PnL \$${agent.pnl.toStringAsFixed(0)}'),
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 360,
+                    child: GlassCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Smart Alerts', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 16),
+                          notifications.when(
+                            data: (items) => Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: items.take(3).map((item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Text(item.message),
+                              )).toList(),
+                            ),
+                            loading: () => const CircularProgressIndicator(),
+                            error: (error, _) => Text(error.toString()),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 360,
+                    child: GlassCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Live Sentiment', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 16),
+                          sentiment.when(
+                            data: (item) => Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${item.trend}  |  ${item.sentimentScore.toStringAsFixed(2)}'),
+                                const SizedBox(height: 8),
+                                ...item.newsItems.take(2).map((news) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text(news.headline),
+                                )),
+                              ],
+                            ),
+                            loading: () => const CircularProgressIndicator(),
+                            error: (error, _) => Text(error.toString()),
                           ),
                         ],
                       ),

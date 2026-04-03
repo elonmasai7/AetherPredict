@@ -13,6 +13,10 @@ class MarketDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final market = ref.watch(selectedMarketProvider);
+    final copilot = ref.watch(copilotProvider);
+    final sentiment = ref.watch(sentimentFeedProvider);
+    final comments = ref.watch(discussionProvider);
+
     return AppScaffold(
       title: 'Market Detail',
       child: market.when(
@@ -34,12 +38,69 @@ class MarketDetailScreen extends ConsumerWidget {
                     children: [
                       FilledButton(onPressed: () => context.go('/trade'), child: const Text('Buy YES')),
                       OutlinedButton(onPressed: () => context.go('/trade'), child: const Text('Buy NO')),
-                      OutlinedButton(onPressed: () {}, child: const Text('Dispute')),
-                      OutlinedButton(onPressed: () {}, child: const Text('Claim Rewards')),
+                      OutlinedButton(onPressed: () => context.go('/discussion'), child: const Text('Discussion')),
+                      OutlinedButton(onPressed: () => context.go('/insurance'), child: const Text('Insurance')),
                     ],
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 16),
+            copilot.when(
+              data: (advice) => GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Aether Copilot', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('${advice.action}  |  ${advice.confidence}% confidence  |  ${advice.risk} risk'),
+                    const SizedBox(height: 8),
+                    Text(advice.reasoning),
+                    const SizedBox(height: 10),
+                    FilledButton(onPressed: () => context.go('/copilot'), child: const Text('Open Copilot')),
+                  ],
+                ),
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text(error.toString())),
+            ),
+            const SizedBox(height: 16),
+            sentiment.when(
+              data: (feed) => GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Sentiment Feed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('${feed.trend}  |  Score ${feed.sentimentScore.toStringAsFixed(2)}  |  Shift ${feed.confidenceShift}'),
+                    const SizedBox(height: 8),
+                    ...feed.newsItems.map((news) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text('${news.headline} • ${news.source}'),
+                    )),
+                  ],
+                ),
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text(error.toString())),
+            ),
+            const SizedBox(height: 16),
+            comments.when(
+              data: (items) => GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Discussion Highlights', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...items.take(2).map((comment) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text('${comment.author}: ${comment.content}'),
+                    )),
+                  ],
+                ),
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text(error.toString())),
             ),
           ],
         ),

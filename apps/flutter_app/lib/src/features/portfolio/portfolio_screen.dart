@@ -11,6 +11,8 @@ class PortfolioScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final portfolio = ref.watch(portfolioProvider);
+    final risk = ref.watch(riskProvider);
+    final hedge = ref.watch(autoHedgeProvider);
     return AppScaffold(
       title: 'Portfolio',
       child: portfolio.when(
@@ -35,6 +37,39 @@ class PortfolioScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 16),
+            risk.when(
+              data: (item) => GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Risk Engine', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('Exposure ${item.totalExposure.toStringAsFixed(1)}  |  ${item.riskScore}'),
+                    Text('VaR 95 \$${item.var95.toStringAsFixed(0)}  |  Max Loss \$${item.maxLoss.toStringAsFixed(0)}'),
+                  ],
+                ),
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text(error.toString())),
+            ),
+            const SizedBox(height: 16),
+            hedge.when(
+              data: (item) => GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Auto Hedge', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('Hedge Ratio ${(item.hedgeRatio * 100).toStringAsFixed(0)}%'),
+                    Text('Protection Score ${item.protectionScore}'),
+                    Text('Estimated Loss Reduction \$${item.estimatedLossReduction.toStringAsFixed(0)}'),
+                  ],
+                ),
+              ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => Center(child: Text(error.toString())),
             ),
           ],
         ),

@@ -1,1 +1,17 @@
-__all__ = ["agent", "ai", "auth", "common", "dispute", "market", "notification", "portfolio"]
+__all__ = [
+    "agent",
+    "ai",
+    "auth",
+    "bundle",
+    "common",
+    "copilot",
+    "dispute",
+    "discussion",
+    "hedge",
+    "insurance",
+    "leaderboard",
+    "market",
+    "notification",
+    "portfolio",
+    "risk",
+]
