@@ -1,7 +1,9 @@
 import asyncio
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
 from app.api import agents, ai, auth, bundles, discussions, disputes, insurance, leaderboard, markets, notifications, portfolio, ws
@@ -66,3 +68,9 @@ async def shutdown() -> None:
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "backend"}
+
+
+# Serve the built Flutter web app from the same origin when available.
+frontend_dist = Path(__file__).resolve().parents[2] / "flutter_app" / "build" / "web"
+if frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

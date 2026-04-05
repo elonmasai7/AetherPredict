@@ -1,5 +1,30 @@
+import 'package:flutter/foundation.dart';
+
 class AppConfig {
-  static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8000');
-  static const wsMarketsUrl = String.fromEnvironment('WS_MARKETS_URL', defaultValue: 'ws://localhost:8000/ws/markets');
   static const walletConnectProjectId = String.fromEnvironment('WALLETCONNECT_PROJECT_ID', defaultValue: '');
+
+  static String get apiBaseUrl {
+    const configured = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb) {
+      final base = Uri.base;
+      final host = base.host;
+      final port = base.hasPort ? ':${base.port}' : '';
+      return '${base.scheme}://$host$port';
+    }
+    return 'http://localhost:8000';
+  }
+
+  static String get wsMarketsUrl {
+    const configured = String.fromEnvironment('WS_MARKETS_URL', defaultValue: '');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb) {
+      final base = Uri.base;
+      final scheme = base.scheme == 'https' ? 'wss' : 'ws';
+      final host = base.host;
+      final port = base.hasPort ? ':${base.port}' : '';
+      return '$scheme://$host$port/ws/markets';
+    }
+    return 'ws://localhost:8000/ws/markets';
+  }
 }

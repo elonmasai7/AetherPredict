@@ -19,7 +19,7 @@ ThemeData buildAetherTheme() {
       primary: accent,
       secondary: secondary,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: panel.withOpacity(0.75),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       elevation: 0,

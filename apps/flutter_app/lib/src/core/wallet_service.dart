@@ -35,7 +35,9 @@ class WalletService {
   }
 
   SessionData? currentSession() {
-    if (_app == null || _app!.sessions.isEmpty) return null;
-    return _app!.sessions.values.first;
+    if (_app == null) return null;
+    final sessions = _app!.sessions.getAll();
+    if (sessions.isEmpty) return null;
+    return sessions.first;
   }
 }
