@@ -1,17 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../core/models.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/glass_card.dart';
-import '../../widgets/market_chart.dart';
+import '../../widgets/market_depth_panel.dart';
+import '../../widgets/news_signal_panel.dart';
+import '../../widgets/trade_execution_modal.dart';
+import '../../widgets/trading_view_chart.dart';
 
-class MarketDetailScreen extends ConsumerWidget {
+class MarketDetailScreen extends ConsumerStatefulWidget {
   const MarketDetailScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MarketDetailScreen> createState() => _MarketDetailScreenState();
+}
+
+class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
+  bool autoHedge = true;
+  bool insurance = false;
+  double size = 1500;
+  String timeframe = '15m';
+
+  final List<String> timeline = const [
+    '10:42 — Bought YES',
+    '11:10 — Confidence increased to 81%',
+    '12:30 — Whale alert triggered',
+    '13:02 — Agent intervention: liquidity rebalance',
+    '13:41 — Dispute note filed by juror cluster',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
     final market = ref.watch(selectedMarketProvider);
     final copilot = ref.watch(copilotProvider);
     final sentiment = ref.watch(sentimentFeedProvider);
@@ -20,93 +42,386 @@ class MarketDetailScreen extends ConsumerWidget {
     return AppScaffold(
       title: 'Market Detail',
       child: market.when(
-        data: (item) => ListView(
-          children: [
-            GlassCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 14),
-                  Text('AI confidence ${(item.aiConfidence * 100).round()}%  |  Liquidity \$${item.liquidity.toStringAsFixed(0)}'),
-                  const SizedBox(height: 18),
-                  SizedBox(height: 280, child: MarketChart(points: item.points)),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      FilledButton(onPressed: () => context.go('/trade'), child: const Text('Buy YES')),
-                      OutlinedButton(onPressed: () => context.go('/trade'), child: const Text('Buy NO')),
-                      OutlinedButton(onPressed: () => context.go('/discussion'), child: const Text('Discussion')),
-                      OutlinedButton(onPressed: () => context.go('/insurance'), child: const Text('Insurance')),
-                    ],
+        data: (item) => LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 1200;
+            if (compact) {
+              return SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _mainContent(item, sentiment, comments, compact: true),
+                    const SizedBox(height: 16),
+                    _tradePanel(item, copilot),
+                  ],
+                ),
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child:
+                        _mainContent(item, sentiment, comments, compact: false),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            copilot.when(
-              data: (advice) => GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Aether Copilot', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text('${advice.action}  |  ${advice.confidence}% confidence  |  ${advice.risk} risk'),
-                    const SizedBox(height: 8),
-                    Text(advice.reasoning),
-                    const SizedBox(height: 10),
-                    FilledButton(onPressed: () => context.go('/copilot'), child: const Text('Open Copilot')),
-                  ],
                 ),
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text(error.toString())),
-            ),
-            const SizedBox(height: 16),
-            sentiment.when(
-              data: (feed) => GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Sentiment Feed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text('${feed.trend}  |  Score ${feed.sentimentScore.toStringAsFixed(2)}  |  Shift ${feed.confidenceShift}'),
-                    const SizedBox(height: 8),
-                    ...feed.newsItems.map((news) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text('${news.headline} • ${news.source}'),
-                    )),
-                  ],
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 360,
+                  child: SingleChildScrollView(
+                    child: _tradePanel(item, copilot),
+                  ),
                 ),
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text(error.toString())),
-            ),
-            const SizedBox(height: 16),
-            comments.when(
-              data: (items) => GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Discussion Highlights', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ...items.take(2).map((comment) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text('${comment.author}: ${comment.content}'),
-                    )),
-                  ],
-                ),
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text(error.toString())),
-            ),
-          ],
+              ],
+            );
+          },
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text(error.toString())),
       ),
     );
+  }
+
+  Widget _mainContent(
+    Market item,
+    AsyncValue<SentimentFeed> sentiment,
+    AsyncValue<List<DiscussionComment>> comments, {
+    required bool compact,
+  }) {
+    return Column(
+      children: [
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.title,
+                            style: const TextStyle(
+                                fontSize: 26, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Category: ${item.category} • Oracle: HashKey oracle mesh',
+                          style: const TextStyle(color: AetherColors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _countdownChip(),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final tf in const ['1m', '5m', '15m', '1h', '4h', '1D'])
+                    ChoiceChip(
+                      label: Text(tf),
+                      selected: timeframe == tf,
+                      onSelected: (_) => setState(() => timeframe = tf),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (compact)
+                Column(
+                  children: [
+                    TradingViewChart(
+                      symbol: _marketSymbol(item.title),
+                      timeframe: timeframe,
+                      height: 300,
+                      overlayProbability: item.yesProbability,
+                    ),
+                    const SizedBox(height: 12),
+                    const MarketDepthPanel(),
+                  ],
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TradingViewChart(
+                        symbol: _marketSymbol(item.title),
+                        timeframe: timeframe,
+                        height: 360,
+                        overlayProbability: item.yesProbability,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const SizedBox(width: 330, child: MarketDepthPanel()),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _explainabilityPanel(item, sentiment),
+        const SizedBox(height: 16),
+        const NewsSignalPanel(),
+        const SizedBox(height: 16),
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Activity Timeline / Audit Trail',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              ...timeline.map(
+                (event) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AetherColors.bgPanel,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AetherColors.border),
+                  ),
+                  child: Text(event),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        comments.when(
+          data: (items) => GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Discussion Thread',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ...items.take(4).map(
+                      (c) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('${c.author}: ${c.content}'),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Text(error.toString()),
+        ),
+        const SizedBox(height: 16),
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text('Dispute Section',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              SizedBox(height: 10),
+              Text(
+                  'Open dispute status: Review in progress. Juror votes are currently 14 YES / 6 NO.'),
+              SizedBox(height: 8),
+              Text(
+                  'Claims and evidence submissions are recorded in immutable audit logs.'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tradePanel(Market item, AsyncValue<CopilotRecommendation> copilot) {
+    final yesPrice = item.yesProbability;
+    final noPrice = 1 - item.yesProbability;
+    final estPnl = (size * (yesPrice - 0.55));
+
+    return Column(
+      children: [
+        GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Trading Console',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => showTradeExecutionModal(context,
+                          side: 'YES', market: item.title),
+                      child: Text(
+                          'Buy YES ${(yesPrice * 100).toStringAsFixed(1)}%'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => showTradeExecutionModal(context,
+                          side: 'NO', market: item.title),
+                      child:
+                          Text('Buy NO ${(noPrice * 100).toStringAsFixed(1)}%'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('Position Size: \$${size.toStringAsFixed(0)}'),
+              Slider(
+                  value: size,
+                  min: 100,
+                  max: 10000,
+                  onChanged: (v) => setState(() => size = v)),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Auto Hedge'),
+                value: autoHedge,
+                onChanged: (v) => setState(() => autoHedge = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Insurance Cover'),
+                value: insurance,
+                onChanged: (v) => setState(() => insurance = v),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Estimated PnL: ${estPnl >= 0 ? '+' : ''}\$${estPnl.toStringAsFixed(0)}',
+                style: TextStyle(
+                    color: estPnl >= 0
+                        ? AetherColors.success
+                        : AetherColors.critical),
+              ),
+              const Text('Slippage Preview: 0.42%',
+                  style: TextStyle(color: AetherColors.muted)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        copilot.when(
+          data: (advice) => GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('AI Recommendation',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Text('${advice.action} • ${advice.confidence}% confidence'),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                    value: advice.confidence / 100, minHeight: 8),
+                const SizedBox(height: 10),
+                Text('Risk: ${advice.risk}',
+                    style: const TextStyle(color: AetherColors.warning)),
+                const SizedBox(height: 8),
+                Text(advice.reasoning),
+              ],
+            ),
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Text(error.toString()),
+        ),
+      ],
+    );
+  }
+
+  Widget _explainabilityPanel(
+      Market item, AsyncValue<SentimentFeed> sentiment) {
+    return GlassCard(
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        collapsedIconColor: AetherColors.muted,
+        iconColor: AetherColors.text,
+        title: const Text('AI Explainability Panel',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        subtitle: const Text(
+            'Transparent contributors, evidence, and reasoning chain'),
+        children: [
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                  child: _infoTile('Confidence',
+                      '${(item.aiConfidence * 100).toStringAsFixed(0)}%')),
+              const SizedBox(width: 8),
+              Expanded(child: _infoTile('Historical Accuracy', '79.4%')),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _infoTile(
+                  'Sentiment Score',
+                  sentiment.maybeWhen(
+                      data: (s) => s.sentimentScore.toStringAsFixed(2),
+                      orElse: () => '--'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('Contributors',
+              style: TextStyle(color: AetherColors.muted)),
+          const SizedBox(height: 8),
+          const Text('+ ETF inflows +18%',
+              style: TextStyle(color: AetherColors.success)),
+          const Text('+ volume momentum +12%',
+              style: TextStyle(color: AetherColors.success)),
+          const Text('- regulatory uncertainty -5%',
+              style: TextStyle(color: AetherColors.warning)),
+          const SizedBox(height: 10),
+          const Text('Evidence Sources',
+              style: TextStyle(color: AetherColors.muted)),
+          const SizedBox(height: 6),
+          const Text(
+              '• HashKey oracle mesh\n• ETF desk flow feed\n• On-chain volume monitor'),
+          const SizedBox(height: 10),
+          const Text('Reasoning Chain',
+              style: TextStyle(color: AetherColors.muted)),
+          const SizedBox(height: 6),
+          const Text(
+              'Momentum remains constructive while volatility is elevated. Recommendation keeps directional exposure with protective hedging enabled.'),
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoTile(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AetherColors.bgPanel,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AetherColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: AetherColors.muted)),
+          const SizedBox(height: 6),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+
+  Widget _countdownChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AetherColors.bgPanel,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AetherColors.border),
+      ),
+      child: const Text('Expiry: 269d 14h',
+          style: TextStyle(fontWeight: FontWeight.w600)),
+    );
+  }
+
+  String _marketSymbol(String title) {
+    final upper = title.toUpperCase();
+    if (upper.contains('BTC')) return 'BTC/USD';
+    if (upper.contains('ETH')) return 'ETH/USD';
+    if (upper.contains('SOL')) return 'SOL/USD';
+    if (upper.contains('HASHKEY')) return 'HSK/USD';
+    return 'BTC/USD';
   }
 }

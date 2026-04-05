@@ -52,45 +52,92 @@ final discussionProvider = FutureProvider<List<DiscussionComment>>((ref) async {
 });
 
 class WalletSessionState {
-  const WalletSessionState({this.address, this.connected = false, this.error});
+  const WalletSessionState({
+    this.address,
+    this.connected = false,
+    this.error,
+    this.type,
+    this.balanceUsd = 0,
+    this.portfolioValue = 0,
+    this.activePositions = 0,
+  });
 
   final String? address;
   final bool connected;
   final String? error;
+  final WalletType? type;
+  final double balanceUsd;
+  final double portfolioValue;
+  final int activePositions;
 
-  WalletSessionState copyWith({String? address, bool? connected, String? error}) {
+  WalletSessionState copyWith({
+    String? address,
+    bool? connected,
+    String? error,
+    WalletType? type,
+    double? balanceUsd,
+    double? portfolioValue,
+    int? activePositions,
+  }) {
     return WalletSessionState(
       address: address ?? this.address,
       connected: connected ?? this.connected,
       error: error,
+      type: type ?? this.type,
+      balanceUsd: balanceUsd ?? this.balanceUsd,
+      portfolioValue: portfolioValue ?? this.portfolioValue,
+      activePositions: activePositions ?? this.activePositions,
     );
   }
 }
 
 class WalletSessionNotifier extends StateNotifier<WalletSessionState> {
-  WalletSessionNotifier(this._walletService) : super(const WalletSessionState());
+  WalletSessionNotifier(this._walletService, this._ref) : super(const WalletSessionState());
 
   final WalletService _walletService;
+  final Ref _ref;
 
   Future<void> restore() async {
     final session = _walletService.currentSession();
     if (session == null) return;
     final accounts = session.namespaces['eip155']?.accounts;
-    state = state.copyWith(address: accounts?.isNotEmpty == true ? accounts!.first : null, connected: accounts?.isNotEmpty == true);
+    final address = accounts?.isNotEmpty == true ? accounts!.first : null;
+    await _syncPortfolio(address: address, type: WalletType.walletConnect, fallbackBalance: 97310.11);
   }
 
-  Future<void> connect() async {
+  Future<void> connect(WalletType type) async {
     try {
-      final session = await _walletService.connect();
-      final accounts = session?.namespaces['eip155']?.accounts;
-      final account = accounts?.isNotEmpty == true ? accounts!.first : null;
-      state = state.copyWith(address: account, connected: account != null, error: null);
+      final account = await _walletService.connect(type);
+      await _syncPortfolio(address: account.address, type: type, fallbackBalance: account.balanceUsd);
     } catch (error) {
       state = state.copyWith(error: error.toString(), connected: false);
     }
   }
+
+  Future<void> disconnect() async {
+    await _walletService.disconnect();
+    state = const WalletSessionState();
+  }
+
+  Future<String> signTrade(String payload) async {
+    return _walletService.signTrade(payload);
+  }
+
+  Future<void> _syncPortfolio({required String? address, required WalletType type, required double fallbackBalance}) async {
+    final positions = await _ref.read(portfolioProvider.future).catchError((_) => <PortfolioPosition>[]);
+    final portfolioValue = positions.fold<double>(0, (sum, p) => sum + (p.size * p.markPrice));
+    state = state.copyWith(
+      address: address,
+      connected: address != null,
+      type: type,
+      balanceUsd: fallbackBalance,
+      portfolioValue: portfolioValue,
+      activePositions: positions.length,
+      error: null,
+    );
+  }
 }
 
 final walletSessionProvider = StateNotifierProvider<WalletSessionNotifier, WalletSessionState>((ref) {
-  return WalletSessionNotifier(ref.read(walletServiceProvider));
+  return WalletSessionNotifier(ref.read(walletServiceProvider), ref);
 });

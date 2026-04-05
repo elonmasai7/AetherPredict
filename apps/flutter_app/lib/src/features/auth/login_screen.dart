@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
+import '../../core/wallet_service.dart';
 import '../../widgets/glass_card.dart';
 
 class LoginScreen extends ConsumerWidget {
@@ -28,16 +29,22 @@ class LoginScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Institutional prediction intelligence', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+                  const Text('Institutional prediction intelligence',
+                      style:
+                          TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Text(
                     'Trade on-chain probabilities with AI-driven confidence, dispute intelligence, and autonomous liquidity support.',
-                    style: TextStyle(color: Colors.white.withOpacity(0.72)),
+                    style:
+                        TextStyle(color: Colors.white.withValues(alpha: 0.72)),
                   ),
                   const SizedBox(height: 24),
-                  const TextField(decoration: InputDecoration(labelText: 'Email')),
+                  const TextField(
+                      decoration: InputDecoration(labelText: 'Email')),
                   const SizedBox(height: 12),
-                  const TextField(obscureText: true, decoration: InputDecoration(labelText: 'Password')),
+                  const TextField(
+                      obscureText: true,
+                      decoration: InputDecoration(labelText: 'Password')),
                   const SizedBox(height: 18),
                   SizedBox(
                     width: double.infinity,
@@ -49,16 +56,21 @@ class LoginScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: () async {
-                      await ref.read(walletSessionProvider.notifier).connect();
+                      await ref
+                          .read(walletSessionProvider.notifier)
+                          .connect(WalletType.walletConnect);
                       if (context.mounted) {
                         context.go('/dashboard');
                       }
                     },
-                    child: Text(wallet.connected ? 'Wallet Connected' : 'Connect Wallet'),
+                    child: Text(wallet.connected
+                        ? 'Wallet Connected'
+                        : 'Connect Wallet'),
                   ),
                   if (wallet.error != null) ...[
                     const SizedBox(height: 12),
-                    Text(wallet.error!, style: const TextStyle(color: Colors.redAccent)),
+                    Text(wallet.error!,
+                        style: const TextStyle(color: Colors.redAccent)),
                   ],
                 ],
               ),

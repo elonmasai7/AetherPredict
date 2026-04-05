@@ -1,70 +1,80 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/models.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/glass_card.dart';
-import '../../widgets/market_chart.dart';
+import '../../widgets/trading_view_chart.dart';
 
-enum _SortMode { volume, confidence, probability, liquidity }
-
-class DashboardScreen extends ConsumerStatefulWidget {
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  String _category = 'All';
-  bool _highConfidenceOnly = false;
-  _SortMode _sortMode = _SortMode.volume;
-  String? _selectedMarketId;
-  double? _scenarioProbability;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _refreshAll() {
-    ref.invalidate(marketListProvider);
-    ref.invalidate(agentListProvider);
-    ref.invalidate(notificationsProvider);
-    ref.invalidate(sentimentFeedProvider);
-    ref.invalidate(riskProvider);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Refreshing live dashboard data...')),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final marketItems = ref.watch(marketListProvider);
-    final agentItems = ref.watch(agentListProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final marketsValue = ref.watch(marketListProvider);
+    final portfolioValue = ref.watch(portfolioProvider);
+    final riskValue = ref.watch(riskProvider);
+    final exposureValue = ref.watch(exposureProvider);
+    final agentsValue = ref.watch(agentListProvider);
+    final alertsValue = ref.watch(notificationsProvider);
+    final sentimentValue = ref.watch(sentimentFeedProvider);
     final liveUpdate = ref.watch(marketUpdatesProvider);
-    final notifications = ref.watch(notificationsProvider);
-    final sentiment = ref.watch(sentimentFeedProvider);
-    final risk = ref.watch(riskProvider);
 
     return AppScaffold(
-      title: 'Command Center',
-      child: marketItems.when(
-        data: (markets) => agentItems.when(
-          data: (agents) => _buildLoaded(
-            context,
-            markets: markets,
-            agents: agents,
-            liveUpdate: liveUpdate,
-            notifications: notifications,
-            sentiment: sentiment,
-            risk: risk,
-          ),
+      title: 'Dashboard',
+      child: marketsValue.when(
+        data: (markets) => portfolioValue.when(
+          data: (positions) {
+            final totalValue = positions.fold<double>(
+                0, (sum, p) => sum + p.size * p.markPrice);
+            final dailyPnl = positions.fold<double>(0, (sum, p) => sum + p.pnl);
+            final confidenceIndex = markets.isEmpty
+                ? 0.0
+                : markets.map((m) => m.aiConfidence).reduce((a, b) => a + b) /
+                    markets.length;
+            final featuredMarket = markets.isEmpty ? null : markets.first;
+
+            return ListView(
+              children: [
+                _topCards(
+                  context,
+                  totalValue: totalValue,
+                  activePositions: positions.length,
+                  dailyPnl: dailyPnl,
+                  confidenceIndex: confidenceIndex,
+                  riskValue: riskValue,
+                ),
+                const SizedBox(height: 16),
+                if (featuredMarket != null) ...[
+                  _featuredMarketPanel(featuredMarket),
+                  const SizedBox(height: 16),
+                ],
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: [
+                    SizedBox(width: 760, child: _pnlChartCard(positions)),
+                    SizedBox(
+                        width: 360, child: _aiSignalsCard(liveUpdate, markets)),
+                    SizedBox(width: 560, child: _marketVolumeCard(markets)),
+                    SizedBox(width: 560, child: _confidenceTrendCard(markets)),
+                    SizedBox(
+                        width: 360, child: _riskExposureCard(exposureValue)),
+                    SizedBox(width: 360, child: _alertsCard(alertsValue)),
+                    SizedBox(
+                        width: 560, child: _agentActivityCard(agentsValue)),
+                    SizedBox(
+                        width: 560, child: _recentTransactionsCard(positions)),
+                    SizedBox(
+                        width: 360, child: _sentimentFeedCard(sentimentValue)),
+                  ],
+                ),
+              ],
+            );
+          },
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text(error.toString())),
         ),
@@ -74,390 +84,460 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildLoaded(
+  Widget _topCards(
     BuildContext context, {
-    required List<Market> markets,
-    required List<AgentCardModel> agents,
-    required AsyncValue<LiveMarketUpdate> liveUpdate,
-    required AsyncValue<List<AppNotification>> notifications,
-    required AsyncValue<SentimentFeed> sentiment,
-    required AsyncValue<PortfolioRiskSnapshot> risk,
+    required double totalValue,
+    required int activePositions,
+    required double dailyPnl,
+    required double confidenceIndex,
+    required AsyncValue<PortfolioRiskSnapshot> riskValue,
   }) {
-    if (markets.isEmpty) {
-      return const Center(child: Text('No markets available yet.'));
-    }
-
-    final allCategories = <String>{'All', ...markets.map((m) => m.category)}.toList();
-    if (!allCategories.contains(_category)) {
-      _category = 'All';
-    }
-
-    final filtered = markets.where((market) {
-      final matchesCategory = _category == 'All' || market.category == _category;
-      final matchesSearch = _searchQuery.isEmpty ||
-          market.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          market.category.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesConfidence = !_highConfidenceOnly || market.aiConfidence >= 0.8;
-      return matchesCategory && matchesSearch && matchesConfidence;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (_sortMode) {
-        case _SortMode.volume:
-          return b.volume.compareTo(a.volume);
-        case _SortMode.confidence:
-          return b.aiConfidence.compareTo(a.aiConfidence);
-        case _SortMode.probability:
-          return b.yesProbability.compareTo(a.yesProbability);
-        case _SortMode.liquidity:
-          return b.liquidity.compareTo(a.liquidity);
-      }
-    });
-
-    final selected = _resolveSelectedMarket(filtered, markets);
-    final simulatedProb = (_scenarioProbability ?? selected.yesProbability).clamp(0.0, 1.0);
-    final alphaEdge = ((selected.aiConfidence - simulatedProb) * 100).toStringAsFixed(1);
-    final wide = MediaQuery.of(context).size.width >= 1260;
-    final primaryWidth = wide ? 760.0 : double.infinity;
-    final sideWidth = wide ? 360.0 : double.infinity;
-
-    return ListView(
+    return Wrap(
+      spacing: 16,
+      runSpacing: 16,
       children: [
-        Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          children: [
-            _metricCard('Visible Markets', '${filtered.length}/${markets.length}', 'After active filters', onTap: _refreshAll),
-            _metricCard('Simulated YES', '${(simulatedProb * 100).round()}%', 'For ${selected.category}', onTap: () {
-              setState(() => _scenarioProbability = selected.yesProbability);
-            }),
-            _metricCard(
-              'Portfolio Risk',
-              risk.maybeWhen(data: (value) => value.riskScore, orElse: () => 'Loading'),
-              risk.maybeWhen(data: (value) => 'VaR95: \$${value.var95.toStringAsFixed(0)}', orElse: () => 'Waiting for risk model'),
-            ),
-            _metricCard(
-              'Live Stream',
-              liveUpdate.maybeWhen(data: (_) => 'Connected', orElse: () => 'Standby'),
-              liveUpdate.maybeWhen(
-                data: (value) => '${value.market} -> ${(value.yesProbability * 100).round()}% YES',
-                orElse: () => 'Waiting for websocket ticks',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        GlassCard(
-          child: Wrap(
-            spacing: 14,
-            runSpacing: 14,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 280,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Search markets or category',
-                  ),
-                  onChanged: (value) => setState(() => _searchQuery = value.trim()),
-                ),
-              ),
-              DropdownButton<_SortMode>(
-                value: _sortMode,
-                borderRadius: BorderRadius.circular(12),
-                items: const [
-                  DropdownMenuItem(value: _SortMode.volume, child: Text('Sort: Volume')),
-                  DropdownMenuItem(value: _SortMode.confidence, child: Text('Sort: AI Confidence')),
-                  DropdownMenuItem(value: _SortMode.probability, child: Text('Sort: YES Probability')),
-                  DropdownMenuItem(value: _SortMode.liquidity, child: Text('Sort: Liquidity')),
-                ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _sortMode = value);
-                },
-              ),
-              FilterChip(
-                selected: _highConfidenceOnly,
-                label: const Text('AI Confidence >= 80%'),
-                onSelected: (value) => setState(() => _highConfidenceOnly = value),
-              ),
-              ...allCategories.map(
-                (value) => ChoiceChip(
-                  selected: _category == value,
-                  label: Text(value),
-                  onSelected: (_) => setState(() => _category = value),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() {
-                    _searchQuery = '';
-                    _category = 'All';
-                    _highConfidenceOnly = false;
-                    _sortMode = _SortMode.volume;
-                  });
-                },
-                icon: const Icon(Icons.restart_alt),
-                label: const Text('Reset'),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          children: [
-            SizedBox(
-              width: primaryWidth,
-              child: GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(selected.title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                              const SizedBox(height: 6),
-                              Text('Category: ${selected.category}'),
-                            ],
-                          ),
-                        ),
-                        FilledButton.icon(
-                          onPressed: () => context.go('/markets'),
-                          icon: const Icon(Icons.manage_search),
-                          label: const Text('Explore'),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            final sourceIndex = markets.indexWhere((item) => item.id == selected.id);
-                            if (sourceIndex >= 0) {
-                              ref.read(selectedMarketIndexProvider.notifier).state = sourceIndex;
-                            }
-                            context.go('/trade');
-                          },
-                          icon: const Icon(Icons.show_chart),
-                          label: const Text('Trade'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(height: 250, child: MarketChart(points: selected.points)),
-                    const SizedBox(height: 12),
-                    Text('Scenario Lab: move YES probability for stress testing', style: TextStyle(color: Colors.white.withValues(alpha: 0.78))),
-                    Slider(
-                      value: simulatedProb,
-                      min: 0,
-                      max: 1,
-                      onChanged: (value) => setState(() => _scenarioProbability = value),
-                    ),
-                    Text(
-                      'AI Confidence ${(selected.aiConfidence * 100).round()}% | Simulated YES ${(simulatedProb * 100).round()}% | Edge $alphaEdge pts',
-                    ),
-                    const SizedBox(height: 18),
-                    const Text('Market Radar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    ...filtered.take(6).map(
-                      (market) => Card(
-                        color: _selectedMarketId == market.id ? Colors.white.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.04),
-                        child: ListTile(
-                          onTap: () {
-                            setState(() {
-                              _selectedMarketId = market.id;
-                              _scenarioProbability = market.yesProbability;
-                            });
-                          },
-                          title: Text(market.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text('${market.category} | Vol \$${market.volume.toStringAsFixed(0)} | Liq \$${market.liquidity.toStringAsFixed(0)}'),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('${(market.yesProbability * 100).round()}% YES'),
-                              Text('AI ${(market.aiConfidence * 100).round()}%', style: TextStyle(color: Colors.white.withValues(alpha: 0.65))),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: sideWidth,
-              child: GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Agent Command Grid', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 14),
-                    ...agents.map(
-                      (agent) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(child: Text(agent.name, style: const TextStyle(fontWeight: FontWeight.w600))),
-                                Text(agent.status),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            LinearProgressIndicator(
-                              value: (agent.pnl.abs() / 25000).clamp(0, 1).toDouble(),
-                              minHeight: 6,
-                              backgroundColor: Colors.white.withValues(alpha: 0.08),
-                            ),
-                            const SizedBox(height: 6),
-                            Text('PnL: \$${agent.pnl.toStringAsFixed(0)}'),
-                            Text(agent.summary, style: TextStyle(color: Colors.white.withValues(alpha: 0.72))),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    FilledButton.icon(
-                      onPressed: () => context.go('/agents'),
-                      icon: const Icon(Icons.psychology_alt),
-                      label: const Text('Open Agent Console'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: sideWidth,
-              child: GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Smart Alerts', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 12),
-                    notifications.when(
-                      data: (items) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ...items.take(5).map(
-                            (item) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    item.level.toUpperCase() == 'HIGH' ? Icons.warning_amber_rounded : Icons.notifications_active,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: Text(item.message)),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: () => context.go('/notifications'),
-                            icon: const Icon(Icons.open_in_new),
-                            label: const Text('View All Alerts'),
-                          ),
-                        ],
-                      ),
-                      loading: () => const CircularProgressIndicator(),
-                      error: (error, _) => Text(error.toString()),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: sideWidth,
-              child: GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Live Sentiment', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 12),
-                    sentiment.when(
-                      data: (item) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              Chip(label: Text('Trend: ${item.trend}')),
-                              Chip(label: Text('Score: ${item.sentimentScore.toStringAsFixed(2)}')),
-                              Chip(label: Text('Shift: ${item.confidenceShift >= 0 ? '+' : ''}${item.confidenceShift}%')),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ...item.newsItems.take(3).map(
-                            (news) => Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Text('• ${news.headline} (${news.source})'),
-                            ),
-                          ),
-                          FilledButton.icon(
-                            onPressed: () => context.go('/copilot'),
-                            icon: const Icon(Icons.auto_awesome),
-                            label: const Text('Open AI Copilot'),
-                          ),
-                        ],
-                      ),
-                      loading: () => const CircularProgressIndicator(),
-                      error: (error, _) => Text(error.toString()),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+        _metricCard(context, 'Total Portfolio Value',
+            '\$${totalValue.toStringAsFixed(0)}', 'Marked to market'),
+        _metricCard(context, 'Active Positions', '$activePositions',
+            'Open YES/NO exposures'),
+        _metricCard(context, 'Daily PnL', '\$${dailyPnl.toStringAsFixed(0)}',
+            dailyPnl >= 0 ? 'Positive day' : 'Drawdown day'),
+        _metricCard(
+            context,
+            'Confidence Index',
+            '${(confidenceIndex * 100).toStringAsFixed(1)}%',
+            'Model-weighted confidence'),
+        _metricCard(
+          context,
+          'Risk Score',
+          riskValue.maybeWhen(
+              data: (v) => v.riskScore, orElse: () => 'Loading'),
+          riskValue.maybeWhen(
+              data: (v) => 'VaR95 \$${v.var95.toStringAsFixed(0)}',
+              orElse: () => 'Awaiting risk engine'),
         ),
       ],
     );
   }
 
-  Market _resolveSelectedMarket(List<Market> filtered, List<Market> fallback) {
-    final source = filtered.isNotEmpty ? filtered : fallback;
-    final selected = source.where((m) => m.id == _selectedMarketId).firstOrNull;
-    final resolved = selected ?? source.first;
-    if (_selectedMarketId != resolved.id) {
-      _selectedMarketId = resolved.id;
-    }
-    return resolved;
-  }
-
-  Widget _metricCard(String label, String value, String detail, {VoidCallback? onTap}) {
+  Widget _metricCard(
+      BuildContext context, String label, String value, String detail) {
     return SizedBox(
-      width: 280,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.72))),
-              const SizedBox(height: 12),
-              Text(value, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(detail, style: TextStyle(color: Colors.white.withValues(alpha: 0.6))),
-            ],
-          ),
+      width: 260,
+      child: GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: AetherColors.muted)),
+            const SizedBox(height: 8),
+            Text(value,
+                style:
+                    numericStyle(context, size: 26, weight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Text(detail, style: const TextStyle(color: AetherColors.muted)),
+          ],
         ),
       ),
     );
   }
-}
 
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
+  Widget _featuredMarketPanel(Market market) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Featured Market Terminal',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text(
+            '${market.title} • AI confidence ${(market.aiConfidence * 100).toStringAsFixed(0)}%',
+            style: const TextStyle(color: AetherColors.muted),
+          ),
+          const SizedBox(height: 12),
+          TradingViewChart(
+            symbol: _marketSymbol(market.title),
+            timeframe: '15m',
+            height: 320,
+            overlayProbability: market.yesProbability,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pnlChartCard(List<PortfolioPosition> positions) {
+    final points = positions.isEmpty
+        ? [1200.0, 1180.0, 1225.0, 1270.0, 1320.0, 1290.0]
+        : positions
+            .asMap()
+            .entries
+            .map((e) => 1000.0 + (e.value.pnl * 1.7))
+            .toList();
+
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Portfolio Summary',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          const Text('PnL Trend', style: TextStyle(color: AetherColors.muted)),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 220,
+            child: LineChart(
+              LineChartData(
+                minY: points.reduce((a, b) => a < b ? a : b) - 100,
+                maxY: points.reduce((a, b) => a > b ? a : b) + 100,
+                gridData: const FlGridData(show: true, drawVerticalLine: false),
+                borderData: FlBorderData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    isCurved: true,
+                    color: AetherColors.accent,
+                    barWidth: 2.2,
+                    belowBarData: BarAreaData(
+                        show: true,
+                        color: AetherColors.accent.withValues(alpha: 0.16)),
+                    spots: [
+                      for (var i = 0; i < points.length; i++)
+                        FlSpot(i.toDouble(), points[i])
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _marketVolumeCard(List<Market> markets) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Live Markets',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          const Text('Market Volume',
+              style: TextStyle(color: AetherColors.muted)),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 220,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                borderData: FlBorderData(show: false),
+                gridData: const FlGridData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                barGroups: [
+                  for (var i = 0; i < markets.take(6).length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: markets[i].volume / 10000,
+                          width: 14,
+                          borderRadius: BorderRadius.circular(4),
+                          color: AetherColors.accentSoft,
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _confidenceTrendCard(List<Market> markets) {
+    final data = markets.isEmpty
+        ? [0.72, 0.75, 0.73, 0.78, 0.81]
+        : markets.take(5).map((m) => m.aiConfidence).toList();
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('AI Confidence Signals',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          const Text('Confidence Trend Graph',
+              style: TextStyle(color: AetherColors.muted)),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 220,
+            child: LineChart(
+              LineChartData(
+                minY: 0,
+                maxY: 1,
+                borderData: FlBorderData(show: false),
+                gridData: const FlGridData(show: true, drawVerticalLine: false),
+                titlesData: const FlTitlesData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    isCurved: true,
+                    barWidth: 2.2,
+                    color: AetherColors.success,
+                    spots: [
+                      for (var i = 0; i < data.length; i++)
+                        FlSpot(i.toDouble(), data[i])
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _riskExposureCard(AsyncValue<List<ExposureSlice>> exposureValue) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Risk Exposure',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          exposureValue.when(
+            data: (slices) => SizedBox(
+              height: 220,
+              child: PieChart(
+                PieChartData(
+                  centerSpaceRadius: 40,
+                  sectionsSpace: 2,
+                  sections: [
+                    for (var i = 0; i < slices.length; i++)
+                      PieChartSectionData(
+                        value: slices[i].allocation,
+                        title: '${slices[i].allocation.toStringAsFixed(0)}%',
+                        color: [
+                          AetherColors.accent,
+                          AetherColors.success,
+                          AetherColors.warning,
+                          AetherColors.accentSoft
+                        ][i % 4],
+                        radius: 52,
+                        titleStyle: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 80),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 80),
+              child: Text(error.toString()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _alertsCard(AsyncValue<List<AppNotification>> alertsValue) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Active Alerts',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          alertsValue.when(
+            data: (alerts) => Column(
+              children: alerts.take(5).map((alert) {
+                final severity = alert.level.toLowerCase();
+                final color = severity == 'critical'
+                    ? AetherColors.critical
+                    : severity == 'warning'
+                        ? AetherColors.warning
+                        : AetherColors.accent;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AetherColors.bgPanel,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AetherColors.border),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(top: 6),
+                          decoration: BoxDecoration(
+                              color: color, shape: BoxShape.circle)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                          child: Text(alert.message,
+                              style: const TextStyle(fontSize: 13))),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 80),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Text(error.toString()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _agentActivityCard(AsyncValue<List<AgentCardModel>> agentsValue) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Agent Activity',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          agentsValue.when(
+            data: (agents) => DataTable(
+              columns: const [
+                DataColumn(label: Text('Agent')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('PnL')),
+              ],
+              rows: [
+                for (final a in agents.take(6))
+                  DataRow(cells: [
+                    DataCell(Text(a.name)),
+                    DataCell(Text(a.status)),
+                    DataCell(Text('\$${a.pnl.toStringAsFixed(0)}')),
+                  ]),
+              ],
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 80),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Text(error.toString()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _recentTransactionsCard(List<PortfolioPosition> positions) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Recent Transactions',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          if (positions.isEmpty)
+            const Text('No active positions. Start by exploring live markets.')
+          else
+            DataTable(
+              columns: const [
+                DataColumn(label: Text('Market')),
+                DataColumn(label: Text('Side')),
+                DataColumn(label: Text('Size')),
+                DataColumn(label: Text('PnL')),
+              ],
+              rows: [
+                for (final p in positions.take(8))
+                  DataRow(cells: [
+                    DataCell(Text(p.marketTitle)),
+                    DataCell(Text(p.side)),
+                    DataCell(Text(p.size.toStringAsFixed(0))),
+                    DataCell(Text('\$${p.pnl.toStringAsFixed(0)}')),
+                  ]),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sentimentFeedCard(AsyncValue<SentimentFeed> sentimentValue) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Market Sentiment Feed',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          sentimentValue.when(
+            data: (sentiment) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    'Trend: ${sentiment.trend} • Score ${sentiment.sentimentScore.toStringAsFixed(2)}'),
+                const SizedBox(height: 10),
+                ...sentiment.newsItems.take(4).map((n) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text('• ${n.headline} (${n.source})'),
+                    )),
+              ],
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 80),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, _) => Text(error.toString()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aiSignalsCard(
+      AsyncValue<LiveMarketUpdate> liveUpdate, List<Market> markets) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Live Signal Tape',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          liveUpdate.when(
+            data: (event) => Text(
+                'Latest: ${event.market} moved to ${(event.yesProbability * 100).toStringAsFixed(1)}% YES'),
+            loading: () => const Text('Connecting websocket...'),
+            error: (_, __) => const Text('Signal stream unavailable'),
+          ),
+          const SizedBox(height: 10),
+          ...markets.take(5).map((m) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                        child: Text(m.title,
+                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    Text('${(m.aiConfidence * 100).toStringAsFixed(0)}%',
+                        style: const TextStyle(color: AetherColors.muted)),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  String _marketSymbol(String title) {
+    final upper = title.toUpperCase();
+    if (upper.contains('BTC')) return 'BTC/USD';
+    if (upper.contains('ETH')) return 'ETH/USD';
+    if (upper.contains('SOL')) return 'SOL/USD';
+    if (upper.contains('HASHKEY')) return 'HSK/USD';
+    return 'BTC/USD';
+  }
 }
