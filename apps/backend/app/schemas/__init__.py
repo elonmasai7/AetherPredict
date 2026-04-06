@@ -1,5 +1,6 @@
 __all__ = [
     "agent",
+    "asset",
     "ai",
     "auth",
     "bundle",
@@ -14,4 +15,7 @@ __all__ = [
     "notification",
     "portfolio",
     "risk",
+    "trade",
+    "watchlist",
+    "workspace",
 ]

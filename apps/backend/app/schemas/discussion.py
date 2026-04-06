@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -17,3 +19,4 @@ class CommentResponse(BaseModel):
     evidence_url: str | None = None
     parent_id: int | None = None
     upvotes: int
+    created_at: datetime

@@ -1,19 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../core/constants.dart';
 import '../core/theme.dart';
 
 class TickerItem {
-  const TickerItem(
-      {required this.symbol,
-      required this.price,
-      required this.changePct,
-      required this.sentiment});
+  const TickerItem({
+    required this.symbol,
+    required this.price,
+    required this.changePct,
+    required this.volume24h,
+  });
+
   final String symbol;
   final double price;
   final double changePct;
-  final double sentiment;
+  final double volume24h;
 }
 
 class LiveTickerBar extends StatefulWidget {
@@ -24,39 +29,40 @@ class LiveTickerBar extends StatefulWidget {
 }
 
 class _LiveTickerBarState extends State<LiveTickerBar> {
-  late List<TickerItem> _items;
+  List<TickerItem> _items = const [];
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _items = const [
-      TickerItem(
-          symbol: 'BTC/USD', price: 118420, changePct: 2.1, sentiment: 0.78),
-      TickerItem(
-          symbol: 'ETH/USD', price: 5320, changePct: -0.8, sentiment: 0.64),
-      TickerItem(
-          symbol: 'SOL/USD', price: 298, changePct: 4.5, sentiment: 0.82),
-      TickerItem(
-          symbol: 'HSK/USD', price: 1.42, changePct: 1.3, sentiment: 0.59),
-    ];
+    _refresh();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+  }
 
-    _timer = Timer.periodic(const Duration(seconds: 4), (_) {
-      setState(() {
-        _items = _items
-            .map((e) => TickerItem(
-                  symbol: e.symbol,
-                  price: (e.price * (1 + ((e.changePct / 100) * 0.002))),
-                  changePct:
-                      (e.changePct + ((e.symbol.hashCode % 7) - 3) * 0.03)
-                          .clamp(-8, 8),
-                  sentiment:
-                      (e.sentiment + (((e.symbol.hashCode % 5) - 2) * 0.002))
-                          .clamp(0, 1),
-                ))
-            .toList();
-      });
-    });
+  Future<void> _refresh() async {
+    try {
+      final response = await http
+          .get(Uri.parse('${AppConfig.apiBaseUrl}/markets/assets'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode < 200 || response.statusCode >= 300) return;
+      final data = jsonDecode(response.body) as List<dynamic>;
+      final items = data
+          .map((item) => item as Map<String, dynamic>)
+          .map(
+            (json) => TickerItem(
+              symbol: json['symbol'] as String,
+              price: (json['price_usd'] as num).toDouble(),
+              changePct: (json['change_24h'] as num).toDouble(),
+              volume24h: (json['volume_24h'] as num).toDouble(),
+            ),
+          )
+          .toList();
+      if (!mounted) return;
+      setState(() => _items = items);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _items = const []);
+    }
   }
 
   @override
@@ -83,41 +89,54 @@ class _LiveTickerBarState extends State<LiveTickerBar> {
               style: TextStyle(fontSize: 12, color: AetherColors.muted)),
           const SizedBox(width: 12),
           Expanded(
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _items.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 16),
-              itemBuilder: (_, i) {
-                final item = _items[i];
-                final up = item.changePct >= 0;
-                return Row(
-                  children: [
-                    Text(
-                        '${item.symbol} ${item.price.toStringAsFixed(item.price > 100 ? 0 : 2)}',
-                        style: const TextStyle(fontSize: 12)),
-                    const SizedBox(width: 4),
-                    Text(
-                        '${up ? '▲' : '▼'}${item.changePct.abs().toStringAsFixed(1)}%',
-                        style: TextStyle(
-                            color: up
-                                ? AetherColors.success
-                                : AetherColors.critical,
-                            fontSize: 12)),
-                    const SizedBox(width: 6),
-                    Text('S:${(item.sentiment * 100).toStringAsFixed(0)}',
-                        style: const TextStyle(
-                            fontSize: 11, color: AetherColors.muted)),
-                  ],
-                );
-              },
-            ),
+            child: _items.isEmpty
+                ? const Text(
+                    'No live market snapshots available yet.',
+                    style: TextStyle(fontSize: 12, color: AetherColors.muted),
+                  )
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _items.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 16),
+                    itemBuilder: (_, i) {
+                      final item = _items[i];
+                      final up = item.changePct >= 0;
+                      return Row(
+                        children: [
+                          Text(
+                            '${item.symbol}/USD ${item.price.toStringAsFixed(item.price > 100 ? 0 : 2)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${up ? '▲' : '▼'}${item.changePct.abs().toStringAsFixed(2)}%',
+                            style: TextStyle(
+                              color: up
+                                  ? AetherColors.success
+                                  : AetherColors.critical,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'V:${_formatCompact(item.volume24h)}',
+                            style: const TextStyle(
+                                fontSize: 11, color: AetherColors.muted),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
           ),
-          const SizedBox(width: 12),
-          const Text(
-              'Breaking: ETF inflows elevated; whale alert on BTC venue cluster.',
-              style: TextStyle(fontSize: 11, color: AetherColors.muted)),
         ],
       ),
     );
+  }
+
+  String _formatCompact(double value) {
+    if (value >= 1000000000) return '${(value / 1000000000).toStringAsFixed(1)}B';
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
+    return value.toStringAsFixed(0);
   }
 }

@@ -47,7 +47,7 @@ AetherPredict is a production-oriented decentralized prediction market platform 
 ## Database and migrations
 
 - Initialize schema with `cd apps/backend && alembic upgrade head`
-- The backend seeds demo-ready live data at startup only after migrated tables exist
+- The backend no longer seeds demo data at startup; production data comes from real user actions, persisted records, and live market sync jobs
 - Redis is used for market update pub/sub and websocket fanout on `/ws/markets`
 - Backend startup now fails fast if Alembic migrations have not been applied
 

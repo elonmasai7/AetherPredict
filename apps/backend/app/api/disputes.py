@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, UploadFile
 from app.db.session import get_db
 from app.models.entities import Dispute
 from app.schemas.dispute import DisputeResponse
+from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/disputes", tags=["disputes"])
 
@@ -16,11 +17,12 @@ def list_disputes(db: Session = Depends(get_db)) -> list[DisputeResponse]:
 
 
 @router.post("")
-async def submit_dispute(market_id: int, evidence: UploadFile, db: Session = Depends(get_db)):
+async def submit_dispute(market_id: int, evidence: UploadFile, db: Session = Depends(get_db), user=Depends(get_current_user)):
     dispute = Dispute(
         market_id=market_id,
+        user_id=user.id,
         evidence_url=f"uploads/{evidence.filename}",
-        ai_summary="Pending AI summarization",
+        ai_summary="Evidence received and queued for analyst review.",
         status="OPEN",
         juror_votes_yes=0,
         juror_votes_no=0,

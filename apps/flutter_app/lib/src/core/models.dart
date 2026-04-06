@@ -3,6 +3,7 @@ class Market {
     required this.id,
     required this.title,
     required this.category,
+    required this.oracleSource,
     required this.yesProbability,
     required this.aiConfidence,
     required this.volume,
@@ -13,6 +14,7 @@ class Market {
   final String id;
   final String title;
   final String category;
+  final String oracleSource;
   final double yesProbability;
   final double aiConfidence;
   final double volume;
@@ -25,6 +27,7 @@ class Market {
       id: json['id'].toString(),
       title: json['title'] as String,
       category: json['category'] as String,
+      oracleSource: (json['oracle_source'] ?? '') as String,
       yesProbability: yesProbability,
       aiConfidence: (json['ai_confidence'] as num).toDouble(),
       volume: (json['volume'] as num).toDouble(),

@@ -335,7 +335,7 @@ class _TopHeader extends StatelessWidget {
           },
           itemBuilder: (_) => const [
             PopupMenuItem(value: 'settings', child: Text('Settings')),
-            PopupMenuItem(value: 'logout', child: Text('Sign out (demo)')),
+            PopupMenuItem(value: 'logout', child: Text('Sign out')),
           ],
           child: const CircleAvatar(
               radius: 16, child: Icon(Icons.person, size: 18)),

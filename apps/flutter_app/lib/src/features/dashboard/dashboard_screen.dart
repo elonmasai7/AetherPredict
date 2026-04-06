@@ -166,13 +166,28 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _pnlChartCard(List<PortfolioPosition> positions) {
-    final points = positions.isEmpty
-        ? [1200.0, 1180.0, 1225.0, 1270.0, 1320.0, 1290.0]
-        : positions
-            .asMap()
-            .entries
-            .map((e) => 1000.0 + (e.value.pnl * 1.7))
-            .toList();
+    if (positions.isEmpty) {
+      return const GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Portfolio Summary',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            SizedBox(height: 12),
+            Text(
+              'No closed or open positions are available yet.',
+              style: TextStyle(color: AetherColors.muted),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final points = positions
+        .asMap()
+        .entries
+        .map((e) => e.value.pnl)
+        .toList();
 
     return GlassCard(
       child: Column(
@@ -256,9 +271,15 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _confidenceTrendCard(List<Market> markets) {
-    final data = markets.isEmpty
-        ? [0.72, 0.75, 0.73, 0.78, 0.81]
-        : markets.take(5).map((m) => m.aiConfidence).toList();
+    if (markets.isEmpty) {
+      return const GlassCard(
+        child: Text(
+          'No live markets available to build a confidence trend yet.',
+          style: TextStyle(color: AetherColors.muted),
+        ),
+      );
+    }
+    final data = markets.take(5).map((m) => m.aiConfidence).toList();
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,31 +327,39 @@ class DashboardScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           exposureValue.when(
-            data: (slices) => SizedBox(
-              height: 220,
-              child: PieChart(
-                PieChartData(
-                  centerSpaceRadius: 40,
-                  sectionsSpace: 2,
-                  sections: [
-                    for (var i = 0; i < slices.length; i++)
-                      PieChartSectionData(
-                        value: slices[i].allocation,
-                        title: '${slices[i].allocation.toStringAsFixed(0)}%',
-                        color: [
-                          AetherColors.accent,
-                          AetherColors.success,
-                          AetherColors.warning,
-                          AetherColors.accentSoft
-                        ][i % 4],
-                        radius: 52,
-                        titleStyle: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w600),
+            data: (slices) => slices.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 80),
+                    child: Text(
+                      'No risk exposure to visualize yet.',
+                      style: TextStyle(color: AetherColors.muted),
+                    ),
+                  )
+                : SizedBox(
+                    height: 220,
+                    child: PieChart(
+                      PieChartData(
+                        centerSpaceRadius: 40,
+                        sectionsSpace: 2,
+                        sections: [
+                          for (var i = 0; i < slices.length; i++)
+                            PieChartSectionData(
+                              value: slices[i].allocation,
+                              title: '${slices[i].allocation.toStringAsFixed(0)}%',
+                              color: [
+                                AetherColors.accent,
+                                AetherColors.success,
+                                AetherColors.warning,
+                                AetherColors.accentSoft
+                              ][i % 4],
+                              radius: 52,
+                              titleStyle: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
-            ),
+                    ),
+                  ),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 80),
               child: Center(child: CircularProgressIndicator()),
@@ -354,7 +383,12 @@ class DashboardScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           alertsValue.when(
-            data: (alerts) => Column(
+            data: (alerts) => alerts.isEmpty
+                ? const Text(
+                    'No active alerts right now.',
+                    style: TextStyle(color: AetherColors.muted),
+                  )
+                : Column(
               children: alerts.take(5).map((alert) {
                 final severity = alert.level.toLowerCase();
                 final color = severity == 'critical'
@@ -408,21 +442,26 @@ class DashboardScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           agentsValue.when(
-            data: (agents) => DataTable(
-              columns: const [
-                DataColumn(label: Text('Agent')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('PnL')),
-              ],
-              rows: [
-                for (final a in agents.take(6))
-                  DataRow(cells: [
-                    DataCell(Text(a.name)),
-                    DataCell(Text(a.status)),
-                    DataCell(Text('\$${a.pnl.toStringAsFixed(0)}')),
-                  ]),
-              ],
-            ),
+            data: (agents) => agents.isEmpty
+                ? const Text(
+                    'No agent telemetry has been recorded yet.',
+                    style: TextStyle(color: AetherColors.muted),
+                  )
+                : DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Agent')),
+                      DataColumn(label: Text('Status')),
+                      DataColumn(label: Text('PnL')),
+                    ],
+                    rows: [
+                      for (final a in agents.take(6))
+                        DataRow(cells: [
+                          DataCell(Text(a.name)),
+                          DataCell(Text(a.status)),
+                          DataCell(Text('\$${a.pnl.toStringAsFixed(0)}')),
+                        ]),
+                    ],
+                  ),
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: 80),
               child: Center(child: CircularProgressIndicator()),

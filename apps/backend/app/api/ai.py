@@ -1,9 +1,13 @@
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.schemas.ai import AIResolutionRequest, AIResolutionResponse
+from app.db.session import get_db
+from app.schemas.ai import AIResolutionRequest, AIResolutionResponse, AISignalRequest, RiskAnalysisRequest
 from app.schemas.copilot import CopilotRecommendationRequest, CopilotRecommendationResponse
+from app.services.ai_engine import build_risk_analysis, build_signal
+from app.services.auth_service import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -28,9 +32,7 @@ async def resolve(payload: AIResolutionRequest) -> AIResolutionResponse:
     except Exception as error:
         _handle_upstream_error(error, "/resolve")
 
-    evidence = data.get("evidence")
-    if evidence is None:
-        evidence = data.get("supporting_evidence", [])
+    evidence = data.get("evidence") or data.get("supporting_evidence", [])
     return AIResolutionResponse(
         outcome=data.get("outcome", "NO"),
         confidence=float(data.get("confidence", 0)),
@@ -39,20 +41,47 @@ async def resolve(payload: AIResolutionRequest) -> AIResolutionResponse:
     )
 
 
+@router.post("/signal")
+def signal(payload: AISignalRequest, db: Session = Depends(get_db), user=Depends(get_optional_user)) -> dict:
+    wallet_address = payload.wallet_address or (user.wallet_address if user else None)
+    signal_row = build_signal(db, payload.market_id, wallet_address)
+    return {
+        "id": signal_row.id,
+        "action": signal_row.action,
+        "confidence": signal_row.confidence,
+        "risk": signal_row.risk,
+        "reasoning": signal_row.reasoning,
+        "payload": signal_row.payload_json,
+    }
+
+
+@router.post("/copilot", response_model=CopilotRecommendationResponse)
+def copilot(payload: CopilotRecommendationRequest, db: Session = Depends(get_db), user=Depends(get_optional_user)) -> CopilotRecommendationResponse:
+    wallet_address = payload.wallet_address or (user.wallet_address if user else None)
+    signal_row = build_signal(db, int(payload.market_id), wallet_address)
+    return CopilotRecommendationResponse(
+        action=signal_row.action,
+        confidence=round(signal_row.confidence * 100),
+        risk=signal_row.risk,
+        reasoning=signal_row.reasoning,
+        position_size=f"{max(2, min(25, round(signal_row.confidence * 20)))}%",
+        sentiment_trend="BULLISH" if signal_row.action == "BUY_YES" else "BEARISH",
+    )
+
+
+@router.post("/risk-analysis")
+def risk_analysis(payload: RiskAnalysisRequest, db: Session = Depends(get_db), user=Depends(get_optional_user)) -> dict:
+    wallet_address = payload.wallet_address or (user.wallet_address if user else "")
+    return build_risk_analysis(db, wallet_address)
+
+
 @router.post("/copilot/recommendation", response_model=CopilotRecommendationResponse)
-async def copilot_recommendation(payload: CopilotRecommendationRequest) -> CopilotRecommendationResponse:
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(f"{settings.ai_service_url}/copilot/recommendation", json=payload.model_dump())
-            response.raise_for_status()
-            data = response.json()
-    except Exception as error:
-        _handle_upstream_error(error, "/copilot/recommendation")
-    return CopilotRecommendationResponse(**data)
+def legacy_copilot(payload: CopilotRecommendationRequest, db: Session = Depends(get_db), user=Depends(get_optional_user)) -> CopilotRecommendationResponse:
+    return copilot(payload, db, user)
 
 
 @router.post("/market/sentiment-feed")
-async def sentiment_feed(payload: dict):
+async def sentiment_feed(payload: dict) -> dict:
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(f"{settings.ai_service_url}/market/sentiment-feed", json=payload)

@@ -13,3 +13,13 @@ class AIResolutionResponse(BaseModel):
     confidence: float
     evidence: list[str]
     anomaly_alerts: list[str]
+
+
+class AISignalRequest(BaseModel):
+    market_id: int
+    wallet_address: str | None = None
+
+
+class RiskAnalysisRequest(BaseModel):
+    wallet_address: str
+    market_id: int | None = None

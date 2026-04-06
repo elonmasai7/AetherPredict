@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../core/models.dart';
 import '../core/theme.dart';
 import 'glass_card.dart';
 
 class NewsSignalPanel extends StatelessWidget {
-  const NewsSignalPanel({super.key});
+  const NewsSignalPanel({super.key, required this.feed});
+
+  final SentimentFeed feed;
 
   @override
   Widget build(BuildContext context) {
-    const feed = [
-      'BTC whale transferred 5,000 BTC to exchange cluster',
-      'Confidence increased from 72% to 81%',
-      'Anomaly alert: sudden basis expansion on perpetuals',
-      'ETF inflow print exceeded 30D average by 18%',
-      'HashKey ecosystem token basket momentum turned positive',
-    ];
+    if (feed.newsItems.isEmpty) {
+      return const GlassCard(
+        child: Text(
+          'No live news or sentiment signals are available for this market yet.',
+          style: TextStyle(color: AetherColors.muted),
+        ),
+      );
+    }
 
     return GlassCard(
       child: Column(
@@ -23,7 +27,7 @@ class NewsSignalPanel extends StatelessWidget {
           const Text('Market News + Signals',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          ...feed
+          ...feed.newsItems
               .map(
                 (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -34,7 +38,7 @@ class NewsSignalPanel extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          item,
+                          '${item.headline} • ${item.source}',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),

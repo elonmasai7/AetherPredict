@@ -1,15 +1,13 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 
 Future<void> showTradeExecutionModal(BuildContext context,
     {required String side, required String market}) async {
-  final amount = TextEditingController(text: '1000');
-  final limit = TextEditingController(text: '0.74');
-  final sl = TextEditingController(text: '0.62');
-  final tp = TextEditingController(text: '0.88');
+  final amount = TextEditingController();
+  final limit = TextEditingController();
+  final sl = TextEditingController();
+  final tp = TextEditingController();
   final slip = TextEditingController(text: '0.5');
 
   try {
@@ -21,7 +19,7 @@ Future<void> showTradeExecutionModal(BuildContext context,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
               side: const BorderSide(color: AetherColors.border)),
-          title: Text('Execute $side Trade'),
+          title: Text('Prepare $side Trade'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -56,8 +54,9 @@ Future<void> showTradeExecutionModal(BuildContext context,
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                        'Estimated Fees: \$4.80 • Gas: \$2.14 • Expected Payout: \$1,284',
-                        style: TextStyle(color: AetherColors.muted)),
+                      'Trades now require a connected signing wallet and backend execution wiring. This dialog captures real inputs without inventing a confirmation hash.',
+                      style: TextStyle(color: AetherColors.muted),
+                    ),
                   ),
                 ],
               ),
@@ -69,24 +68,17 @@ Future<void> showTradeExecutionModal(BuildContext context,
                 child: const Text('Cancel')),
             FilledButton(
               onPressed: () {
-                final amountValue = double.tryParse(amount.text);
-                final limitValue = double.tryParse(limit.text);
-                final slValue = double.tryParse(sl.text);
-                final tpValue = double.tryParse(tp.text);
-                final slippageValue = double.tryParse(slip.text);
-
-                if ([amountValue, limitValue, slValue, tpValue, slippageValue]
-                    .contains(null)) {
+                if ([amount.text, limit.text, sl.text, tp.text, slip.text]
+                    .any((value) => value.trim().isEmpty)) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                         content: Text(
-                            'Please enter valid numeric trade parameters.')),
+                            'Enter complete trade parameters before continuing.')),
                   );
                   return;
                 }
 
                 Navigator.pop(context);
-                final hash = _fakeHash();
                 showDialog<void>(
                   context: context,
                   builder: (_) => AlertDialog(
@@ -94,31 +86,19 @@ Future<void> showTradeExecutionModal(BuildContext context,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                         side: const BorderSide(color: AetherColors.border)),
-                    title: const Text('Trade Executed Successfully'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Market: $market'),
-                        Text('Side: $side'),
-                        const SizedBox(height: 8),
-                        Text('Tx Hash: $hash',
-                            style: numericStyle(context, size: 12)),
-                        const SizedBox(height: 8),
-                        TextButton(
-                            onPressed: () {},
-                            child: const Text('View on Explorer')),
-                      ],
+                    title: const Text('Trade Ready for Signature'),
+                    content: Text(
+                      'Market: $market\nSide: $side\nAmount: ${amount.text}\nLimit: ${limit.text}\n\nNo transaction has been broadcast yet.',
                     ),
                     actions: [
                       FilledButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text('Done')),
+                          child: const Text('Close')),
                     ],
                   ),
                 );
               },
-              child: const Text('Confirm Trade'),
+              child: const Text('Continue'),
             ),
           ],
         );
@@ -131,10 +111,4 @@ Future<void> showTradeExecutionModal(BuildContext context,
     tp.dispose();
     slip.dispose();
   }
-}
-
-String _fakeHash() {
-  const chars = 'abcdef0123456789';
-  final random = Random();
-  return '0x${List.generate(64, (_) => chars[random.nextInt(chars.length)]).join()}';
 }

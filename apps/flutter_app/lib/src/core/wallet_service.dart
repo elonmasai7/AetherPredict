@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:walletconnect_flutter_v2/walletconnect_flutter_v2.dart';
 
 import 'constants.dart';
@@ -25,37 +23,43 @@ class WalletService {
         url: 'https://aetherpredict.local',
         icons: ['https://walletconnect.com/walletconnect-logo.png'],
         redirect: Redirect(
-            native: 'aetherpredict://',
-            universal: 'https://aetherpredict.local'),
+          native: 'aetherpredict://',
+          universal: 'https://aetherpredict.local',
+        ),
       ),
     );
     return _app!;
   }
 
   Future<WalletAccount> connect(WalletType type) async {
-    if (type == WalletType.walletConnect) {
-      final app = await init();
-      final connection = await app.connect(
-        requiredNamespaces: {
-          'eip155': const RequiredNamespace(
-            chains: ['eip155:133'],
-            methods: [
-              'eth_sendTransaction',
-              'personal_sign',
-              'eth_signTypedData'
-            ],
-            events: ['accountsChanged', 'chainChanged'],
-          ),
-        },
+    if (AppConfig.walletConnectProjectId.isEmpty) {
+      throw UnsupportedError(
+        'WalletConnect is not configured. Set WALLETCONNECT_PROJECT_ID before connecting wallets.',
       );
-      final session = await connection.session.future;
-      final account = session.namespaces['eip155']?.accounts.firstOrNull ??
-          _fakeAddress(type);
-      return WalletAccount(address: account, balanceUsd: _mockBalance(type));
     }
 
-    return WalletAccount(
-        address: _fakeAddress(type), balanceUsd: _mockBalance(type));
+    final app = await init();
+    final connection = await app.connect(
+      requiredNamespaces: {
+        'eip155': const RequiredNamespace(
+          chains: ['eip155:133'],
+          methods: [
+            'eth_sendTransaction',
+            'personal_sign',
+            'eth_signTypedData'
+          ],
+          events: ['accountsChanged', 'chainChanged'],
+        ),
+      },
+    );
+    final session = await connection.session.future;
+    final account = session.namespaces['eip155']?.accounts.firstOrNull;
+    if (account == null) {
+      throw StateError('Wallet connected without an account address.');
+    }
+    final parts = account.split(':');
+    final address = parts.isNotEmpty ? parts.last : account;
+    return WalletAccount(address: address, balanceUsd: 0);
   }
 
   SessionData? currentSession() {
@@ -76,35 +80,13 @@ class WalletService {
   }
 
   Future<String> signTrade(String payload) async {
-    final random = Random();
-    const chars = 'abcdef0123456789';
-    return '0x${List.generate(64, (_) => chars[random.nextInt(chars.length)]).join()}';
-  }
-
-  double _mockBalance(WalletType type) {
-    switch (type) {
-      case WalletType.phantom:
-        return 182450.52;
-      case WalletType.walletConnect:
-        return 97310.11;
-      case WalletType.metaMask:
-        return 126004.88;
-      case WalletType.coinbase:
-        return 84592.05;
+    final session = currentSession();
+    if (session == null) {
+      throw StateError('Connect a wallet before signing a trade.');
     }
-  }
-
-  String _fakeAddress(WalletType type) {
-    switch (type) {
-      case WalletType.phantom:
-        return 'Phntm8x3k2...a91';
-      case WalletType.walletConnect:
-        return '0xA37HEr...0001';
-      case WalletType.metaMask:
-        return '0xF4a8d2...9bc1';
-      case WalletType.coinbase:
-        return '0xCb0d43...7ef2';
-    }
+    throw UnsupportedError(
+      'Interactive trade signing is not wired through the Flutter wallet bridge yet.',
+    );
   }
 }
 

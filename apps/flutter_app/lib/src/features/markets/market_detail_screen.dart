@@ -24,14 +24,6 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
   double size = 1500;
   String timeframe = '15m';
 
-  final List<String> timeline = const [
-    '10:42 — Bought YES',
-    '11:10 — Confidence increased to 81%',
-    '12:30 — Whale alert triggered',
-    '13:02 — Agent intervention: liquidity rebalance',
-    '13:41 — Dispute note filed by juror cluster',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final market = ref.watch(selectedMarketProvider);
@@ -106,7 +98,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                                 fontSize: 26, fontWeight: FontWeight.w700)),
                         const SizedBox(height: 6),
                         Text(
-                          'Category: ${item.category} • Oracle: HashKey oracle mesh',
+                          'Category: ${item.category} • Oracle: ${item.oracleSource}',
                           style: const TextStyle(color: AetherColors.muted),
                         ),
                       ],
@@ -138,7 +130,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                       overlayProbability: item.yesProbability,
                     ),
                     const SizedBox(height: 12),
-                    const MarketDepthPanel(),
+                    MarketDepthPanel(symbol: _marketSymbol(item.title).split('/').first),
                   ],
                 )
               else
@@ -154,7 +146,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const SizedBox(width: 330, child: MarketDepthPanel()),
+                    SizedBox(width: 330, child: MarketDepthPanel(symbol: _marketSymbol(item.title).split('/').first)),
                   ],
                 ),
             ],
@@ -163,7 +155,14 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
         const SizedBox(height: 16),
         _explainabilityPanel(item, sentiment),
         const SizedBox(height: 16),
-        const NewsSignalPanel(),
+        sentiment.when(
+          data: (feed) => NewsSignalPanel(feed: feed),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => GlassCard(
+            child: Text(error.toString(),
+                style: const TextStyle(color: AetherColors.muted)),
+          ),
+        ),
         const SizedBox(height: 16),
         GlassCard(
           child: Column(
@@ -172,17 +171,9 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
               const Text('Activity Timeline / Audit Trail',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
-              ...timeline.map(
-                (event) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AetherColors.bgPanel,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AetherColors.border),
-                  ),
-                  child: Text(event),
-                ),
+              const Text(
+                'No audit events have been recorded for this market yet.',
+                style: TextStyle(color: AetherColors.muted),
               ),
             ],
           ),
@@ -217,8 +208,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
               Text('Dispute Section',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               SizedBox(height: 10),
-              Text(
-                  'Open dispute status: Review in progress. Juror votes are currently 14 YES / 6 NO.'),
+              Text('No open disputes are recorded for this market right now.'),
               SizedBox(height: 8),
               Text(
                   'Claims and evidence submissions are recorded in immutable audit logs.'),

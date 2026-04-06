@@ -10,5 +10,9 @@ __all__ = [
     "markets",
     "notifications",
     "portfolio",
+    "reports",
+    "trades",
+    "watchlists",
+    "workspaces",
     "ws",
 ]

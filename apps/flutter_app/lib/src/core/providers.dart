@@ -12,10 +12,18 @@ final selectedMarketIndexProvider = StateProvider<int>((ref) => 0);
 final selectedMarketProvider = Provider<AsyncValue<Market>>((ref) {
   final marketsValue = ref.watch(marketListProvider);
   final selectedIndex = ref.watch(selectedMarketIndexProvider);
-  return marketsValue.whenData((items) => items[selectedIndex.clamp(0, items.length - 1)]);
+  return marketsValue.whenData((items) {
+    if (items.isEmpty) {
+      throw StateError('No markets available.');
+    }
+    return items[selectedIndex.clamp(0, items.length - 1)];
+  });
 });
 final selectedMarketFutureProvider = FutureProvider<Market>((ref) async {
   final items = await ref.watch(marketListProvider.future);
+  if (items.isEmpty) {
+    throw StateError('No markets available.');
+  }
   final selectedIndex = ref.watch(selectedMarketIndexProvider);
   return items[selectedIndex.clamp(0, items.length - 1)];
 });
@@ -31,13 +39,16 @@ final traderLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) a
 final agentLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async => ref.read(apiClientProvider).fetchLeaderboard('agents'));
 final jurorLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async => ref.read(apiClientProvider).fetchLeaderboard('jurors'));
 final bundleProvider = FutureProvider<List<BundleModel>>((ref) async => ref.read(apiClientProvider).fetchBundles());
-final insuranceQuoteProvider = FutureProvider<InsuranceQuote>((ref) async => ref.read(apiClientProvider).fetchInsuranceQuote('demo-position'));
-final autoHedgeProvider = FutureProvider<AutoHedgePlan>((ref) async => ref.read(apiClientProvider).fetchAutoHedge('btc-120k-2026', 4200));
+final insuranceQuoteProvider = FutureProvider<InsuranceQuote>((ref) async => ref.read(apiClientProvider).fetchInsuranceQuote('0'));
+final autoHedgeProvider = FutureProvider<AutoHedgePlan>((ref) async {
+  final market = await ref.watch(selectedMarketFutureProvider.future);
+  return ref.read(apiClientProvider).fetchAutoHedge(market.id, 0);
+});
 
 final copilotProvider = FutureProvider<CopilotRecommendation>((ref) async {
   final wallet = ref.watch(walletSessionProvider);
   final market = await ref.watch(selectedMarketFutureProvider.future);
-  return ref.read(apiClientProvider).fetchCopilot(market.id, wallet.address ?? '0xdemo');
+  return ref.read(apiClientProvider).fetchCopilot(market.id, wallet.address ?? '');
 });
 
 final sentimentFeedProvider = FutureProvider<SentimentFeed>((ref) async {
@@ -102,7 +113,7 @@ class WalletSessionNotifier extends StateNotifier<WalletSessionState> {
     if (session == null) return;
     final accounts = session.namespaces['eip155']?.accounts;
     final address = accounts?.isNotEmpty == true ? accounts!.first : null;
-    await _syncPortfolio(address: address, type: WalletType.walletConnect, fallbackBalance: 97310.11);
+    await _syncPortfolio(address: address, type: WalletType.walletConnect, fallbackBalance: 0);
   }
 
   Future<void> connect(WalletType type) async {
