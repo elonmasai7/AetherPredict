@@ -159,6 +159,10 @@ class TransactionRecord(Base):
     tx_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     explorer_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     gas_fee_native: Mapped[float | None] = mapped_column(Float, nullable=True)
+    block_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gas_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    event_logs: Mapped[dict] = mapped_column(JSON, default=dict)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -328,6 +332,20 @@ class WalletBalance(Base):
 
     user: Mapped["User"] = relationship(back_populates="wallet_balances")
 
+
+class ChainTransaction(Base):
+    __tablename__ = "chain_transactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    tx_type: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(30), default="AWAITING_WALLET_SIGNATURE")
+    tx_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    explorer_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class AssetSnapshot(Base):
     __tablename__ = "asset_snapshots"

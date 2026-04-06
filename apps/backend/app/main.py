@@ -10,6 +10,8 @@ from app.api import (
     agents,
     ai,
     auth,
+    blockchain,
+    chain_tx,
     bundles,
     discussions,
     disputes,
@@ -28,6 +30,7 @@ from app.core.config import settings
 from app.db.session import SessionLocal, engine
 from app.services.market_data import live_market_data_worker
 from app.services.redis_bus import market_feed_worker
+from app.services.tx_receipt_worker import tx_receipt_worker
 
 app = FastAPI(title=settings.app_name, version="0.2.0")
 
@@ -41,6 +44,8 @@ app.add_middleware(
 
 for route in (
     auth.router,
+    blockchain.router,
+    chain_tx.router,
     markets.router,
     portfolio.router,
     trades.router,
@@ -61,11 +66,12 @@ for route in (
 
 stream_task: asyncio.Task | None = None
 asset_task: asyncio.Task | None = None
+receipt_task: asyncio.Task | None = None
 
 
 @app.on_event("startup")
 async def startup() -> None:
-    global stream_task, asset_task
+    global stream_task, asset_task, receipt_task
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
     required_tables = {
@@ -86,12 +92,13 @@ async def startup() -> None:
     SessionLocal().close()
     stream_task = asyncio.create_task(market_feed_worker())
     asset_task = asyncio.create_task(live_market_data_worker())
+    receipt_task = asyncio.create_task(tx_receipt_worker())
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
-    global stream_task, asset_task
-    for task in (stream_task, asset_task):
+    global stream_task, asset_task, receipt_task
+    for task in (stream_task, asset_task, receipt_task):
         if task is not None:
             task.cancel()
 

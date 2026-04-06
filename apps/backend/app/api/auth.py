@@ -20,6 +20,7 @@ from app.services.auth_service import (
     get_current_user,
     issue_tokens,
     rotate_refresh_token,
+    verify_wallet_signature,
 )
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -56,6 +57,10 @@ def wallet_login(payload: WalletLoginRequest, db: Session = Depends(get_db)) -> 
         from fastapi import HTTPException
 
         raise HTTPException(status_code=401, detail="Invalid wallet challenge response")
+    if not verify_wallet_signature(payload.wallet_address, nonce, payload.signature):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=401, detail="Invalid wallet signature")
     user = db.scalar(select(User).where(User.wallet_address == payload.wallet_address))
     if user is None:
         from fastapi import HTTPException

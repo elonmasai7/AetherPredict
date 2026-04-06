@@ -1,4 +1,5 @@
 from collections import defaultdict
+import httpx
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -10,6 +11,8 @@ from app.schemas.hedge import AutoHedgeRequest, AutoHedgeResponse
 from app.schemas.portfolio import PositionResponse
 from app.schemas.risk import ExposureSlice, PerformancePoint, PortfolioRiskResponse
 from app.services.auth_service import get_current_user, get_optional_user
+from app.services.blockchain_service import BlockchainService
+from app.core.config import settings
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -122,3 +125,86 @@ def auto_hedge(payload: AutoHedgeRequest, db: Session = Depends(get_db), user=De
         protection_score=protection_score,
         estimated_loss_reduction=estimated_loss_reduction,
     )
+
+
+@router.get("/balances")
+def wallet_balances(db: Session = Depends(get_db), user=Depends(get_optional_user)) -> list[dict]:
+    if user is None or not user.wallet_address:
+        return []
+    chain = BlockchainService()
+    native_balance = chain.get_native_balance(user.wallet_address)
+    balance_row = db.scalar(
+        select(WalletBalance).where(
+            WalletBalance.user_id == user.id,
+            WalletBalance.wallet_address == user.wallet_address,
+            WalletBalance.symbol == "HSK",
+        )
+    )
+    if balance_row is None:
+        balance_row = WalletBalance(
+            user_id=user.id,
+            wallet_address=user.wallet_address,
+            network="hashkey",
+            symbol="HSK",
+            balance=native_balance,
+            price_usd=0,
+            value_usd=0,
+        )
+        db.add(balance_row)
+    else:
+        balance_row.balance = native_balance
+
+    token_rows = []
+    prices = {}
+    try:
+        response = httpx.get(
+            f"{settings.coingecko_api_url}/simple/price",
+            params={"ids": "usd-coin,tether", "vs_currencies": "usd"},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            prices = response.json()
+    except Exception:
+        prices = {}
+
+    for symbol, address in (("USDC", settings.hashkey_usdc_address), ("USDT", settings.hashkey_usdt_address)):
+        if not address:
+            continue
+        token_balance, _ = chain.get_erc20_balance(address, user.wallet_address)
+        price_id = "usd-coin" if symbol == "USDC" else "tether"
+        price = float(prices.get(price_id, {}).get("usd", 1.0)) if prices else 1.0
+        row = db.scalar(
+            select(WalletBalance).where(
+                WalletBalance.user_id == user.id,
+                WalletBalance.wallet_address == user.wallet_address,
+                WalletBalance.symbol == symbol,
+            )
+        )
+        if row is None:
+            row = WalletBalance(
+                user_id=user.id,
+                wallet_address=user.wallet_address,
+                network="hashkey",
+                symbol=symbol,
+                balance=token_balance,
+                price_usd=price,
+                value_usd=token_balance * price,
+            )
+            db.add(row)
+        else:
+            row.balance = token_balance
+            row.price_usd = price
+            row.value_usd = token_balance * price
+        token_rows.append(row)
+    db.commit()
+    rows = db.scalars(select(WalletBalance).where(WalletBalance.user_id == user.id)).all()
+    return [
+        {
+            "symbol": row.symbol,
+            "balance": row.balance,
+            "network": row.network,
+            "price_usd": row.price_usd,
+            "value_usd": row.value_usd,
+        }
+        for row in rows
+    ]

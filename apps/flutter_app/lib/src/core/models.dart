@@ -4,6 +4,7 @@ class Market {
     required this.title,
     required this.category,
     required this.oracleSource,
+    required this.onChainAddress,
     required this.yesProbability,
     required this.aiConfidence,
     required this.volume,
@@ -15,6 +16,7 @@ class Market {
   final String title;
   final String category;
   final String oracleSource;
+  final String? onChainAddress;
   final double yesProbability;
   final double aiConfidence;
   final double volume;
@@ -28,6 +30,7 @@ class Market {
       title: json['title'] as String,
       category: json['category'] as String,
       oracleSource: (json['oracle_source'] ?? '') as String,
+      onChainAddress: json['on_chain_address'] as String?,
       yesProbability: yesProbability,
       aiConfidence: (json['ai_confidence'] as num).toDouble(),
       volume: (json['volume'] as num).toDouble(),
@@ -120,6 +123,32 @@ class LiveMarketUpdate {
   }
 }
 
+class TxUpdate {
+  const TxUpdate({
+    this.tradeId,
+    this.txId,
+    required this.marketId,
+    required this.status,
+    required this.txHash,
+  });
+
+  final int? tradeId;
+  final int? txId;
+  final int marketId;
+  final String status;
+  final String txHash;
+
+  factory TxUpdate.fromJson(Map<String, dynamic> json) {
+    return TxUpdate(
+      tradeId: json['trade_id'] as int?,
+      txId: json['tx_id'] as int?,
+      marketId: json['market_id'] as int,
+      status: json['status'] as String,
+      txHash: json['tx_hash'] as String,
+    );
+  }
+}
+
 class CopilotRecommendation {
   const CopilotRecommendation({
     required this.action,
@@ -178,6 +207,31 @@ class PortfolioRiskSnapshot {
   }
 }
 
+class WalletBalance {
+  const WalletBalance({
+    required this.symbol,
+    required this.balance,
+    required this.network,
+    required this.priceUsd,
+    required this.valueUsd,
+  });
+  final String symbol;
+  final double balance;
+  final String network;
+  final double priceUsd;
+  final double valueUsd;
+
+  factory WalletBalance.fromJson(Map<String, dynamic> json) {
+    return WalletBalance(
+      symbol: json['symbol'] as String,
+      balance: (json['balance'] as num).toDouble(),
+      network: json['network'] as String? ?? 'hashkey',
+      priceUsd: (json['price_usd'] as num?)?.toDouble() ?? 0,
+      valueUsd: (json['value_usd'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 class ExposureSlice {
   const ExposureSlice({required this.category, required this.allocation});
 
@@ -216,6 +270,78 @@ class AppNotification {
     return AppNotification(
       level: json['level'] as String,
       message: json['message'] as String,
+    );
+  }
+}
+
+class PreparedTrade {
+  const PreparedTrade({required this.tradeId, required this.tx});
+
+  final int tradeId;
+  final Map<String, dynamic> tx;
+
+  factory PreparedTrade.fromJson(Map<String, dynamic> json) {
+    return PreparedTrade(
+      tradeId: json['trade_id'] as int,
+      tx: json['tx'] as Map<String, dynamic>,
+    );
+  }
+}
+
+class TradeExecution {
+  const TradeExecution({
+    required this.id,
+    required this.marketId,
+    required this.side,
+    required this.status,
+    this.txHash,
+  });
+
+  final int id;
+  final int marketId;
+  final String side;
+  final String status;
+  final String? txHash;
+
+  factory TradeExecution.fromJson(Map<String, dynamic> json) {
+    return TradeExecution(
+      id: json['id'] as int,
+      marketId: json['market_id'] as int,
+      side: json['side'] as String,
+      status: json['status'] as String,
+      txHash: json['tx_hash'] as String?,
+    );
+  }
+}
+
+class DisputeHistoryEntry {
+  const DisputeHistoryEntry({
+    required this.id,
+    required this.marketId,
+    required this.status,
+    required this.evidenceUrl,
+    required this.createdAt,
+    this.txHash,
+    this.chainStatus,
+  });
+
+  final int id;
+  final int marketId;
+  final String status;
+  final String evidenceUrl;
+  final String createdAt;
+  final String? txHash;
+  final String? chainStatus;
+
+  factory DisputeHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return DisputeHistoryEntry(
+      id: json['id'] as int,
+      marketId: json['market_id'] as int,
+      status: json['status'] as String,
+      evidenceUrl: json['evidence_url'] as String,
+      createdAt: json['created_at'] as String,
+      txHash: json['tx_hash'] as String?,
+      chainStatus: json['chain_status'] as String?,
     );
   }
 }

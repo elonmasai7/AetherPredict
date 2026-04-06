@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.models.entities import AssetSnapshot, Market, Notification
 from app.schemas.asset import AssetSnapshotResponse
 from app.schemas.market import CreateMarketRequest, MarketResponse
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, get_optional_user, get_or_create_wallet_user
 from app.services.market_stream import publish_market_update
 
 router = APIRouter(prefix="/markets", tags=["markets"])
@@ -36,8 +36,12 @@ def get_market(market_id: int, db: Session = Depends(get_db)) -> MarketResponse:
 async def create_market(
     payload: CreateMarketRequest,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(get_optional_user),
 ) -> MarketResponse:
+    if user is None and payload.wallet_address:
+        user = get_or_create_wallet_user(db, payload.wallet_address)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Wallet or auth required")
     market = Market(
         slug=payload.title.lower().replace(" ", "-"),
         title=payload.title,
@@ -70,4 +74,18 @@ async def create_market(
     db.commit()
     db.refresh(market)
     await publish_market_update(db, market)
+    return MarketResponse.model_validate(market, from_attributes=True)
+
+
+@router.patch("/{market_id}/link", response_model=MarketResponse)
+def link_market(market_id: int, payload: dict, db: Session = Depends(get_db), user=Depends(get_current_user)) -> MarketResponse:
+    market = db.scalar(select(Market).where(Market.id == market_id))
+    if market is None:
+        raise HTTPException(status_code=404, detail="Market not found")
+    address = payload.get("on_chain_address")
+    if not address:
+        raise HTTPException(status_code=400, detail="on_chain_address required")
+    market.on_chain_address = address
+    db.commit()
+    db.refresh(market)
     return MarketResponse.model_validate(market, from_attributes=True)

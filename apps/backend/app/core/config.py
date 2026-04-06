@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -17,14 +18,26 @@ class Settings(BaseSettings):
     market_poll_interval_seconds: int = 30
     price_alert_threshold_pct: float = 5.0
     hashkey_rpc_url: str = ""
+    hashkey_rpc_fallbacks: list[str] = []
     hashkey_chain_id: int = 133
     hashkey_private_key: str = ""
     treasury_address: str = ""
+    hashkey_factory_address: str = ""
+    hashkey_usdc_address: str = ""
+    hashkey_usdt_address: str = ""
+    tx_websocket_channel: str = "aetherpredict:tx_updates"
     hashkey_explorer_url: str = "https://explorer.hashkeychain.example"
     websocket_channel: str = "aetherpredict:market_updates"
     walletconnect_project_id: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("hashkey_rpc_fallbacks", mode="before")
+    @classmethod
+    def _split_fallbacks(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
 
 
 settings = Settings()

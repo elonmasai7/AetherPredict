@@ -31,9 +31,12 @@ final selectedMarketFutureProvider = FutureProvider<Market>((ref) async {
 final agentListProvider = FutureProvider<List<AgentCardModel>>((ref) async => ref.read(apiClientProvider).fetchAgents());
 final portfolioProvider = FutureProvider<List<PortfolioPosition>>((ref) async => ref.read(apiClientProvider).fetchPortfolio());
 final marketUpdatesProvider = StreamProvider<LiveMarketUpdate>((ref) => ref.read(apiClientProvider).marketUpdates());
+final txUpdatesProvider = StreamProvider<TxUpdate>((ref) => ref.read(apiClientProvider).txUpdates());
 final riskProvider = FutureProvider<PortfolioRiskSnapshot>((ref) async => ref.read(apiClientProvider).fetchRisk());
 final exposureProvider = FutureProvider<List<ExposureSlice>>((ref) async => ref.read(apiClientProvider).fetchExposure());
 final performanceProvider = FutureProvider<List<PerformancePoint>>((ref) async => ref.read(apiClientProvider).fetchPerformance());
+final walletBalancesProvider = FutureProvider<List<WalletBalance>>((ref) async => ref.read(apiClientProvider).fetchWalletBalances());
+final disputeHistoryProvider = FutureProvider<List<DisputeHistoryEntry>>((ref) async => ref.read(apiClientProvider).fetchDisputeHistory());
 final notificationsProvider = FutureProvider<List<AppNotification>>((ref) async => ref.read(apiClientProvider).fetchNotifications());
 final traderLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async => ref.read(apiClientProvider).fetchLeaderboard('traders'));
 final agentLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async => ref.read(apiClientProvider).fetchLeaderboard('agents'));
@@ -107,19 +110,25 @@ class WalletSessionNotifier extends StateNotifier<WalletSessionState> {
 
   final WalletService _walletService;
   final Ref _ref;
+  bool _listening = false;
+  bool _restored = false;
 
   Future<void> restore() async {
+    if (_restored) return;
+    _restored = true;
     final session = _walletService.currentSession();
     if (session == null) return;
     final accounts = session.namespaces['eip155']?.accounts;
     final address = accounts?.isNotEmpty == true ? accounts!.first : null;
     await _syncPortfolio(address: address, type: WalletType.walletConnect, fallbackBalance: 0);
+    _listenWalletEvents();
   }
 
   Future<void> connect(WalletType type) async {
     try {
       final account = await _walletService.connect(type);
       await _syncPortfolio(address: account.address, type: type, fallbackBalance: account.balanceUsd);
+      _listenWalletEvents();
     } catch (error) {
       state = state.copyWith(error: error.toString(), connected: false);
     }
@@ -136,16 +145,34 @@ class WalletSessionNotifier extends StateNotifier<WalletSessionState> {
 
   Future<void> _syncPortfolio({required String? address, required WalletType type, required double fallbackBalance}) async {
     final positions = await _ref.read(portfolioProvider.future).catchError((_) => <PortfolioPosition>[]);
+    final balances = await _ref.read(walletBalancesProvider.future).catchError((_) => <WalletBalance>[]);
+    final balanceUsd = balances.isEmpty ? fallbackBalance : balances.fold<double>(0, (sum, b) => sum + b.valueUsd);
     final portfolioValue = positions.fold<double>(0, (sum, p) => sum + (p.size * p.markPrice));
     state = state.copyWith(
       address: address,
       connected: address != null,
       type: type,
-      balanceUsd: fallbackBalance,
+      balanceUsd: balanceUsd,
       portfolioValue: portfolioValue,
       activePositions: positions.length,
       error: null,
     );
+  }
+
+  void _listenWalletEvents() {
+    if (_listening) return;
+    _listening = true;
+    _walletService.sessionEvents().listen((event) {
+      final data = event is Map<String, dynamic> ? event : <String, dynamic>{};
+      if (data['name'] == 'accountsChanged') {
+        final accounts = data['data'] as List<dynamic>? ?? [];
+        final address = accounts.isNotEmpty ? accounts.first.toString() : null;
+        _syncPortfolio(address: address, type: state.type ?? WalletType.walletConnect, fallbackBalance: 0);
+      }
+      if (data['name'] == 'chainChanged') {
+        _syncPortfolio(address: state.address, type: state.type ?? WalletType.walletConnect, fallbackBalance: state.balanceUsd);
+      }
+    });
   }
 }
 

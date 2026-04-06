@@ -12,6 +12,7 @@ class WalletAccount {
 
 class WalletService {
   Web3App? _app;
+  SessionData? _session;
 
   Future<Web3App> init() async {
     if (_app != null) return _app!;
@@ -28,6 +29,7 @@ class WalletService {
         ),
       ),
     );
+    _session = currentSession();
     return _app!;
   }
 
@@ -53,6 +55,7 @@ class WalletService {
       },
     );
     final session = await connection.session.future;
+    _session = session;
     final account = session.namespaces['eip155']?.accounts.firstOrNull;
     if (account == null) {
       throw StateError('Wallet connected without an account address.');
@@ -69,6 +72,41 @@ class WalletService {
     return sessions.first;
   }
 
+  Stream<dynamic> sessionEvents() {
+    final app = _app;
+    if (app == null) {
+      return const Stream.empty();
+    }
+    return app.onSessionEvent;
+  }
+
+  Future<int?> currentChainId() async {
+    final session = _session ?? currentSession();
+    if (session == null) return null;
+    final chain = session.namespaces['eip155']?.chains.firstOrNull;
+    if (chain == null) return null;
+    final parts = chain.split(':');
+    return parts.length == 2 ? int.tryParse(parts[1]) : null;
+  }
+
+  Future<void> switchChain(int chainId) async {
+    final session = _session ?? currentSession();
+    if (session == null) {
+      throw StateError('Connect a wallet before switching chains.');
+    }
+    final app = await init();
+    await app.request(
+      topic: session.topic,
+      chainId: 'eip155:$chainId',
+      request: SessionRequestParams(
+        method: 'wallet_switchEthereumChain',
+        params: [
+          {'chainId': '0x${chainId.toRadixString(16)}'}
+        ],
+      ),
+    );
+  }
+
   Future<void> disconnect() async {
     if (_app == null) return;
     for (final s in _app!.sessions.getAll()) {
@@ -77,6 +115,7 @@ class WalletService {
         reason: Errors.getSdkError(Errors.USER_DISCONNECTED),
       );
     }
+    _session = null;
   }
 
   Future<String> signTrade(String payload) async {
@@ -87,6 +126,23 @@ class WalletService {
     throw UnsupportedError(
       'Interactive trade signing is not wired through the Flutter wallet bridge yet.',
     );
+  }
+
+  Future<String> sendTransaction(Map<String, dynamic> tx) async {
+    final session = _session ?? currentSession();
+    if (session == null) {
+      throw StateError('Connect a wallet before submitting a transaction.');
+    }
+    final app = await init();
+    final result = await app.request(
+      topic: session.topic,
+      chainId: 'eip155:133',
+      request: SessionRequestParams(
+        method: 'eth_sendTransaction',
+        params: [tx],
+      ),
+    );
+    return result as String;
   }
 }
 

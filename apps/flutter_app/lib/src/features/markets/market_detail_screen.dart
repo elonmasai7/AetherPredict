@@ -8,7 +8,6 @@ import '../../widgets/app_scaffold.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/market_depth_panel.dart';
 import '../../widgets/news_signal_panel.dart';
-import '../../widgets/trade_execution_modal.dart';
 import '../../widgets/trading_view_chart.dart';
 
 class MarketDetailScreen extends ConsumerStatefulWidget {
@@ -23,6 +22,10 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
   bool insurance = false;
   double size = 1500;
   String timeframe = '15m';
+  String? tradeStatus;
+  String? tradeError;
+  int? pendingTradeId;
+  String? pendingTxHash;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +33,18 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
     final copilot = ref.watch(copilotProvider);
     final sentiment = ref.watch(sentimentFeedProvider);
     final comments = ref.watch(discussionProvider);
+    final wallet = ref.watch(walletSessionProvider);
+
+    ref.listen(txUpdatesProvider, (previous, next) {
+      next.whenData((update) {
+        if (pendingTradeId == update.tradeId) {
+          setState(() {
+            tradeStatus = update.status.toLowerCase();
+            pendingTxHash = update.txHash;
+          });
+        }
+      });
+    });
 
     return AppScaffold(
       title: 'Market Detail',
@@ -43,7 +58,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                   children: [
                     _mainContent(item, sentiment, comments, compact: true),
                     const SizedBox(height: 16),
-                    _tradePanel(item, copilot),
+                    _tradePanel(item, copilot, wallet),
                   ],
                 ),
               );
@@ -62,7 +77,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                 SizedBox(
                   width: 360,
                   child: SingleChildScrollView(
-                    child: _tradePanel(item, copilot),
+                    child: _tradePanel(item, copilot, wallet),
                   ),
                 ),
               ],
@@ -219,7 +234,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
     );
   }
 
-  Widget _tradePanel(Market item, AsyncValue<CopilotRecommendation> copilot) {
+  Widget _tradePanel(Market item, AsyncValue<CopilotRecommendation> copilot, WalletSessionState wallet) {
     final yesPrice = item.yesProbability;
     final noPrice = 1 - item.yesProbability;
     final estPnl = (size * (yesPrice - 0.55));
@@ -237,8 +252,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                 children: [
                   Expanded(
                     child: FilledButton(
-                      onPressed: () => showTradeExecutionModal(context,
-                          side: 'YES', market: item.title),
+                      onPressed: wallet.connected ? () => _executeTrade(item, 'YES') : null,
                       child: Text(
                           'Buy YES ${(yesPrice * 100).toStringAsFixed(1)}%'),
                     ),
@@ -246,8 +260,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => showTradeExecutionModal(context,
-                          side: 'NO', market: item.title),
+                      onPressed: wallet.connected ? () => _executeTrade(item, 'NO') : null,
                       child:
                           Text('Buy NO ${(noPrice * 100).toStringAsFixed(1)}%'),
                     ),
@@ -255,6 +268,15 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                 ],
               ),
               const SizedBox(height: 12),
+              if (!wallet.connected)
+                const Text(
+                  'Connect a wallet to execute live trades.',
+                  style: TextStyle(color: AetherColors.muted),
+                ),
+              if (tradeStatus != null) ...[
+                const SizedBox(height: 12),
+                _tradeStatusCard(),
+              ],
               Text('Position Size: \$${size.toStringAsFixed(0)}'),
               Slider(
                   value: size,
@@ -372,6 +394,89 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _tradeStatusCard() {
+    final status = tradeStatus ?? 'idle';
+    final message = switch (status) {
+      'awaiting_wallet_signature' => 'Awaiting signature in wallet.',
+      'signing_rejected' => 'Signature rejected in wallet.',
+      'broadcasting' => 'Broadcasting transaction to HashKey Chain.',
+      'pending_confirmation' => 'Transaction submitted. Awaiting confirmation.',
+      'confirmed' => 'Trade confirmed on-chain.',
+      'failed' => tradeError ?? 'Trade failed.',
+      'reverted' => 'Transaction reverted on-chain.',
+      _ => 'Preparing trade.',
+    };
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Trade Status: $status',
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Text(message, style: const TextStyle(color: AetherColors.muted)),
+          if (pendingTxHash != null) ...[
+            const SizedBox(height: 6),
+            Text('Tx Hash: $pendingTxHash',
+                style: numericStyle(context, size: 12)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _executeTrade(Market item, String side) async {
+    setState(() {
+      tradeStatus = 'awaiting_wallet_signature';
+      tradeError = null;
+      pendingTxHash = null;
+    });
+    try {
+      final wallet = ref.read(walletSessionProvider);
+      final api = ref.read(apiClientProvider);
+      final walletService = ref.read(walletServiceProvider);
+      if (!wallet.connected || wallet.address == null) {
+        throw StateError('Wallet is not connected.');
+      }
+      final chainId = await walletService.currentChainId();
+      if (chainId != 133) {
+        await walletService.switchChain(133);
+      }
+      final prepared = await api.prepareTrade(
+        marketId: item.id,
+        side: side,
+        collateralAmount: size,
+        walletAddress: wallet.address!,
+      );
+      setState(() {
+        pendingTradeId = prepared.tradeId;
+        tradeStatus = 'broadcasting';
+      });
+      final txHash = await walletService.sendTransaction({
+        'from': wallet.address,
+        'to': prepared.tx['to'],
+        'data': prepared.tx['data'],
+        'value': prepared.tx['value'],
+        if (prepared.tx['gas'] != null) 'gas': prepared.tx['gas'],
+        if (prepared.tx['gasPrice'] != null) 'gasPrice': prepared.tx['gasPrice'],
+        if (prepared.tx['nonce'] != null) 'nonce': prepared.tx['nonce'],
+        'chainId': prepared.tx['chainId'],
+      });
+      setState(() {
+        tradeStatus = 'pending_confirmation';
+        pendingTxHash = txHash;
+      });
+      await api.submitTradeHash(tradeId: prepared.tradeId, txHash: txHash, walletAddress: wallet.address);
+    } catch (error) {
+      final message = error.toString();
+      setState(() {
+        tradeStatus = message.contains('USER_REJECTED') || message.contains('rejected')
+            ? 'signing_rejected'
+            : 'failed';
+        tradeError = message;
+      });
+    }
   }
 
   Widget _infoTile(String label, String value) {

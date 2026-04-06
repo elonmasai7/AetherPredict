@@ -53,6 +53,22 @@ class AppScaffold extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final wallet = ref.watch(walletSessionProvider);
     final portfolio = ref.watch(portfolioProvider);
+    ref.read(walletSessionProvider.notifier).restore();
+    ref.listen(txUpdatesProvider, (previous, next) {
+      next.whenData((update) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final message = update.status.toLowerCase() == 'confirmed'
+              ? 'Transaction confirmed: ${update.txHash}'
+              : 'Transaction ${update.status}: ${update.txHash}';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        });
+      });
+    });
 
     final portfolioSummary = portfolio.maybeWhen(
       data: (positions) =>

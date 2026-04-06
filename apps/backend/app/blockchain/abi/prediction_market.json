@@ -1,0 +1,91 @@
+[
+  {
+    "inputs": [],
+    "name": "buy_yes",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "buy_no",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bool", "name": "yesSide", "type": "bool" },
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" }
+    ],
+    "name": "sell_position",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "claim_rewards",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "string", "name": "evidenceUri", "type": "string" }
+    ],
+    "name": "dispute_outcome",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "trader", "type": "address" },
+      { "indexed": false, "internalType": "bool", "name": "yesSide", "type": "bool" },
+      { "indexed": false, "internalType": "uint256", "name": "collateral", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "minted", "type": "uint256" }
+    ],
+    "name": "PositionBought",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "trader", "type": "address" },
+      { "indexed": false, "internalType": "bool", "name": "yesSide", "type": "bool" },
+      { "indexed": false, "internalType": "uint256", "name": "burned", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "collateralReturned", "type": "uint256" }
+    ],
+    "name": "PositionSold",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": false, "internalType": "bool", "name": "outcomeYes", "type": "bool" },
+      { "indexed": false, "internalType": "uint256", "name": "confidenceScore", "type": "uint256" }
+    ],
+    "name": "MarketResolved",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "disputer", "type": "address" },
+      { "indexed": false, "internalType": "string", "name": "evidenceUri", "type": "string" }
+    ],
+    "name": "OutcomeDisputed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "reward", "type": "uint256" }
+    ],
+    "name": "RewardsClaimed",
+    "type": "event"
+  }
+]

@@ -13,6 +13,18 @@ class CreateTradeRequest(BaseModel):
     signed_payload: str | None = None
 
 
+class PrepareTradeRequest(BaseModel):
+    market_id: int
+    side: str
+    collateral_amount: float
+    wallet_address: str
+
+
+class PrepareTradeResponse(BaseModel):
+    trade_id: int
+    tx: dict
+
+
 class TradeResponse(BaseModel):
     id: int
     market_id: int

@@ -2,6 +2,8 @@ __all__ = [
     "agents",
     "ai",
     "auth",
+    "blockchain",
+    "chain_tx",
     "bundles",
     "discussions",
     "disputes",

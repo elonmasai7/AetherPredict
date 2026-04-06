@@ -17,6 +17,7 @@ dependencies:
   http: ^1.2.2
   web_socket_channel: ^2.4.5
   walletconnect_flutter_v2: ^2.2.3
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

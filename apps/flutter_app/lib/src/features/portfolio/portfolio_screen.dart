@@ -15,6 +15,7 @@ class PortfolioScreen extends ConsumerWidget {
     final portfolio = ref.watch(portfolioProvider);
     final risk = ref.watch(riskProvider);
     final hedge = ref.watch(autoHedgeProvider);
+    final balances = ref.watch(walletBalancesProvider);
 
     return AppScaffold(
       title: 'Portfolio',
@@ -68,6 +69,57 @@ class PortfolioScreen extends ConsumerWidget {
                             DataCell(Text('\$${item.pnl.toStringAsFixed(0)}')),
                           ]),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Wallet Balances',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    balances.when(
+                      data: (items) {
+                        if (items.isEmpty) {
+                          return const Text('No balances detected.',
+                              style: TextStyle(color: AetherColors.muted));
+                        }
+                        final total = items.fold<double>(0, (sum, item) => sum + item.valueUsd);
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Total Wallet Value: \$${total.toStringAsFixed(2)}',
+                                style: numericStyle(context,
+                                    size: 22, weight: FontWeight.w700)),
+                            const SizedBox(height: 12),
+                            DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Token')),
+                                DataColumn(label: Text('Balance')),
+                                DataColumn(label: Text('Price')),
+                                DataColumn(label: Text('Value')),
+                              ],
+                              rows: [
+                                for (final item in items)
+                                  DataRow(cells: [
+                                    DataCell(Text(item.symbol)),
+                                    DataCell(Text(item.balance.toStringAsFixed(4))),
+                                    DataCell(Text('\$${item.priceUsd.toStringAsFixed(2)}')),
+                                    DataCell(Text('\$${item.valueUsd.toStringAsFixed(2)}')),
+                                  ]),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(),
+                      ),
+                      error: (error, _) => Text(error.toString()),
                     ),
                   ],
                 ),

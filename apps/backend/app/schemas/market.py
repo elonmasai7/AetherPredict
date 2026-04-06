@@ -34,3 +34,4 @@ class CreateMarketRequest(BaseModel):
     resolution_rules: str
     collateral_token: str
     liquidity_amount: float = 0
+    wallet_address: str | None = None

@@ -17,6 +17,8 @@ from app.services.security import (
     hash_token,
     verify_password,
 )
+from web3 import Web3
+from eth_account.messages import encode_defunct
 
 
 def parse_bearer_token(authorization: str | None) -> str:
@@ -133,3 +135,31 @@ def ensure_wallet_nonce(db: Session, wallet_address: str) -> str:
         user.wallet_nonce = secrets.token_hex(16)
         db.commit()
     return user.wallet_nonce or ""
+
+
+def get_or_create_wallet_user(db: Session, wallet_address: str) -> User:
+    user = db.scalar(select(User).where(User.wallet_address == wallet_address))
+    if user is None:
+        user = User(
+            email=f"{wallet_address.lower()}@wallet.local",
+            password_hash=hash_password(secrets.token_urlsafe(24)),
+            wallet_address=wallet_address,
+            wallet_nonce=secrets.token_hex(16),
+            display_name=wallet_address[:10],
+            notification_preferences={"email": False, "push": True, "in_app": True},
+            account_preferences={"login": "wallet"},
+            workspace_preferences={},
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
+def verify_wallet_signature(wallet_address: str, nonce: str, signature: str) -> bool:
+    message = encode_defunct(text=f"AetherPredict login nonce: {nonce}")
+    try:
+        recovered = Web3().eth.account.recover_message(message, signature=signature)
+    except Exception:
+        return False
+    return recovered.lower() == wallet_address.lower()

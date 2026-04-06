@@ -106,14 +106,97 @@ class ApiClient {
 
   Stream<LiveMarketUpdate> marketUpdates() {
     final channel = WebSocketChannel.connect(Uri.parse(AppConfig.wsMarketsUrl));
-    return channel.stream.map((event) {
-      try {
-        final payload = jsonDecode(event as String) as Map<String, dynamic>;
-        return LiveMarketUpdate.fromJson(payload);
-      } catch (_) {
-        throw ApiException('Invalid websocket payload from ${AppConfig.wsMarketsUrl}');
-      }
+    return channel.stream
+        .map((event) => jsonDecode(event as String) as Map<String, dynamic>)
+        .where((payload) => payload['type'] != 'tx')
+        .map((payload) => LiveMarketUpdate.fromJson(payload));
+  }
+
+  Stream<TxUpdate> txUpdates() {
+    final channel = WebSocketChannel.connect(Uri.parse(AppConfig.wsTxUrl));
+    return channel.stream
+        .map((event) => jsonDecode(event as String) as Map<String, dynamic>)
+        .where((payload) => payload['type'] == 'tx')
+        .map((payload) => TxUpdate.fromJson(payload));
+  }
+
+  Future<PreparedTrade> prepareTrade({
+    required String marketId,
+    required String side,
+    required double collateralAmount,
+    required String walletAddress,
+  }) async {
+    final response = await _post('/trades/prepare', {
+      'market_id': int.parse(marketId),
+      'side': side,
+      'collateral_amount': collateralAmount,
+      'wallet_address': walletAddress,
     });
+    return PreparedTrade.fromJson(_decodeMap(response, endpoint: '/trades/prepare'));
+  }
+
+  Future<TradeExecution> submitTradeHash({
+    required int tradeId,
+    required String txHash,
+    String? walletAddress,
+  }) async {
+    final response = await _post('/trades/$tradeId/submit', {
+      'tx_hash': txHash,
+      if (walletAddress != null) 'wallet_address': walletAddress,
+    });
+    return TradeExecution.fromJson(_decodeMap(response, endpoint: '/trades/$tradeId/submit'));
+  }
+
+  Future<List<WalletBalance>> fetchWalletBalances() async {
+    final response = await _get('/portfolio/balances');
+    final payload = _decodeList(response, endpoint: '/portfolio/balances');
+    return payload.map((item) => WalletBalance.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<DisputeHistoryEntry>> fetchDisputeHistory() async {
+    final response = await _get('/disputes/history');
+    final payload = _decodeList(response, endpoint: '/disputes/history');
+    return payload.map((item) => DisputeHistoryEntry.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<Market> createMarket(Map<String, dynamic> payload) async {
+    final response = await _post('/markets', payload);
+    return Market.fromJson(_decodeMap(response, endpoint: '/markets'));
+  }
+
+  Future<Market> fetchMarketById(int id) async {
+    final response = await _get('/markets/$id');
+    return Market.fromJson(_decodeMap(response, endpoint: '/markets/$id'));
+  }
+
+  Future<Map<String, dynamic>> buildCreateMarketTx(Map<String, dynamic> payload) async {
+    final response = await _post('/blockchain/create-market', payload);
+    return _decodeMap(response, endpoint: '/blockchain/create-market')['tx'] as Map<String, dynamic>;
+  }
+
+  Future<int> createMarketChainTx(int marketId, String walletAddress) async {
+    final response = await _post('/chain-tx/market-create', {'market_id': marketId, 'wallet_address': walletAddress});
+    final message = _decodeMap(response, endpoint: '/chain-tx/market-create')['message'] as String;
+    return int.parse(message);
+  }
+
+  Future<void> submitChainTx(int txId, String txHash, String walletAddress) async {
+    await _post('/chain-tx/$txId/submit', {'tx_hash': txHash, 'wallet_address': walletAddress});
+  }
+
+  Future<Map<String, dynamic>> buildDisputeTx(Map<String, dynamic> payload) async {
+    final response = await _post('/blockchain/dispute', payload);
+    return _decodeMap(response, endpoint: '/blockchain/dispute')['tx'] as Map<String, dynamic>;
+  }
+
+  Future<int> createDisputeChainTx(int marketId, String walletAddress, String evidenceUri) async {
+    final response = await _post('/chain-tx/dispute', {
+      'market_id': marketId,
+      'wallet_address': walletAddress,
+      'evidence_uri': evidenceUri,
+    });
+    final message = _decodeMap(response, endpoint: '/chain-tx/dispute')['message'] as String;
+    return int.parse(message);
   }
 
   Future<http.Response> _get(String endpoint) async {

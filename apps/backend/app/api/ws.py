@@ -11,3 +11,10 @@ async def market_stream(websocket: WebSocket):
     await websocket.accept()
     async for payload in subscribe(settings.websocket_channel):
         await websocket.send_json(payload)
+
+
+@router.websocket("/ws/tx")
+async def tx_stream(websocket: WebSocket):
+    await websocket.accept()
+    async for payload in subscribe(settings.tx_websocket_channel):
+        await websocket.send_json(payload)
