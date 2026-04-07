@@ -44,4 +44,30 @@ class AppConfig {
     }
     return 'ws://localhost:8000/ws/tx';
   }
+
+  static String get wsVaultsUrl {
+    const configured = String.fromEnvironment('WS_VAULTS_URL', defaultValue: '');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb) {
+      final base = Uri.base;
+      final scheme = base.scheme == 'https' ? 'wss' : 'ws';
+      final host = base.host;
+      final port = base.hasPort ? ':${base.port}' : '';
+      return '$scheme://$host$port/ws/vaults';
+    }
+    return 'ws://localhost:8000/ws/vaults';
+  }
+
+  static String get wsCopyUrl {
+    const configured = String.fromEnvironment('WS_COPY_URL', defaultValue: '');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb) {
+      final base = Uri.base;
+      final scheme = base.scheme == 'https' ? 'wss' : 'ws';
+      final host = base.host;
+      final port = base.hasPort ? ':${base.port}' : '';
+      return '$scheme://$host$port/ws/copy';
+    }
+    return 'ws://localhost:8000/ws/copy';
+  }
 }

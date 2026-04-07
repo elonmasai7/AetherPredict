@@ -27,6 +27,8 @@ class BuiltTransaction:
 
 
 class BlockchainService:
+    _erc20_decimals_cache: dict[str, int] = {}
+
     def __init__(self) -> None:
         self.web3 = self._build_web3()
         self.chain_id = settings.hashkey_chain_id
@@ -61,6 +63,16 @@ class BlockchainService:
         decimals = contract.functions.decimals().call()
         normalized = balance / (10 ** decimals)
         return float(normalized), int(decimals)
+
+    def get_erc20_decimals(self, token_address: str) -> int:
+        cache_key = token_address.lower()
+        if cache_key in self._erc20_decimals_cache:
+            return self._erc20_decimals_cache[cache_key]
+        abi = self._load_erc20_abi()
+        contract = self.web3.eth.contract(address=Web3.to_checksum_address(token_address), abi=abi)
+        decimals = int(contract.functions.decimals().call())
+        self._erc20_decimals_cache[cache_key] = decimals
+        return decimals
 
     def _contract(self, address: str, abi_name: str):
         abi = self._load_abi(abi_name)
@@ -137,6 +149,83 @@ class BlockchainService:
         )
         return self._build_tx(wallet_address, settings.hashkey_factory_address, data, creation_fee_wei)
 
+    def build_create_vault(
+        self,
+        wallet_address: str,
+        manager: str,
+        collateral_token: str,
+        title: str,
+        strategy_description: str,
+        risk_profile: str,
+        manager_type: str,
+        management_fee_bps: int,
+        performance_fee_bps: int,
+        share_name: str,
+        share_symbol: str,
+    ) -> BuiltTransaction:
+        if not settings.hashkey_vault_factory_address:
+            raise RuntimeError("HASHKEY_VAULT_FACTORY_ADDRESS must be configured.")
+        factory = self._contract(settings.hashkey_vault_factory_address, "strategy_vault_factory")
+        data = factory.encodeABI(
+            fn_name="createVault",
+            args=[
+                manager,
+                collateral_token,
+                title,
+                strategy_description,
+                risk_profile,
+                manager_type,
+                management_fee_bps,
+                performance_fee_bps,
+                share_name,
+                share_symbol,
+            ],
+        )
+        return self._build_tx(wallet_address, settings.hashkey_vault_factory_address, data, 0)
+
+    def build_vault_deposit(self, vault_address: str, wallet_address: str, amount_wei: int) -> BuiltTransaction:
+        contract = self._contract(vault_address, "strategy_vault")
+        data = contract.encodeABI(fn_name="deposit", args=[amount_wei])
+        return self._build_tx(wallet_address, vault_address, data, 0)
+
+    def build_vault_withdraw(self, vault_address: str, wallet_address: str, shares_wei: int) -> BuiltTransaction:
+        contract = self._contract(vault_address, "strategy_vault")
+        data = contract.encodeABI(fn_name="withdraw", args=[shares_wei])
+        return self._build_tx(wallet_address, vault_address, data, 0)
+
+    def build_vault_execute_trade(
+        self,
+        vault_address: str,
+        wallet_address: str,
+        market_address: str,
+        action: str,
+        amount_wei: int,
+    ) -> BuiltTransaction:
+        contract = self._contract(vault_address, "strategy_vault")
+        data = contract.encodeABI(
+            fn_name="executeTrade",
+            args=[market_address, self._to_bytes32(action), amount_wei],
+        )
+        return self._build_tx(wallet_address, vault_address, data, 0)
+
+    def build_vault_rebalance(self, vault_address: str, wallet_address: str) -> BuiltTransaction:
+        contract = self._contract(vault_address, "strategy_vault")
+        data = contract.encodeABI(fn_name="rebalance", args=[])
+        return self._build_tx(wallet_address, vault_address, data, 0)
+
+    def build_vault_distribute_returns(self, vault_address: str, wallet_address: str, gross_return_wei: int) -> BuiltTransaction:
+        contract = self._contract(vault_address, "strategy_vault")
+        data = contract.encodeABI(fn_name="distributeReturns", args=[gross_return_wei])
+        return self._build_tx(wallet_address, vault_address, data, 0)
+
+    def build_erc20_approve(self, token_address: str, wallet_address: str, spender: str, amount_wei: int) -> BuiltTransaction:
+        contract = self.web3.eth.contract(
+            address=Web3.to_checksum_address(token_address),
+            abi=self._load_erc20_abi(),
+        )
+        data = contract.encodeABI(fn_name="approve", args=[spender, amount_wei])
+        return self._build_tx(wallet_address, token_address, data, 0)
+
     def buy_yes_position(self, market_address: str, wallet_address: str, collateral_wei: int) -> BuiltTransaction:
         return self.build_buy_yes(market_address, wallet_address, collateral_wei)
 
@@ -210,3 +299,21 @@ class BlockchainService:
                 }
             )
         return events
+
+    def parse_vault_factory_events(self, receipt: dict) -> list[dict]:
+        if not settings.hashkey_vault_factory_address:
+            raise RuntimeError("HASHKEY_VAULT_FACTORY_ADDRESS must be configured.")
+        factory = self._contract(settings.hashkey_vault_factory_address, "strategy_vault_factory")
+        events = []
+        for log in factory.events.VaultCreated().process_receipt(receipt):
+            events.append(
+                {
+                    "event": log["event"],
+                    "args": dict(log["args"]),
+                }
+            )
+        return events
+
+    def _to_bytes32(self, action: str) -> bytes:
+        raw = Web3.to_bytes(text=action)
+        return raw.ljust(32, b"\0")[:32]

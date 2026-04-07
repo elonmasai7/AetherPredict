@@ -21,6 +21,8 @@ const _desktopItems = [
   _NavItem('AI Signals', '/copilot', Icons.auto_awesome_outlined),
   _NavItem('Research Workspace', '/research', Icons.edit_note_outlined),
   _NavItem('Leaderboard', '/leaderboard', Icons.emoji_events_outlined),
+  _NavItem('Vaults', '/vaults', Icons.account_balance_outlined),
+  _NavItem('Copy Trading', '/copy-trading', Icons.content_copy_outlined),
   _NavItem('Notifications', '/notifications', Icons.notifications_none),
   _NavItem('Reports', '/reports', Icons.assessment_outlined),
   _NavItem('Operations Console', '/operations',
@@ -33,6 +35,8 @@ const _mobileItems = [
   _NavItem('Home', '/dashboard', Icons.home_outlined),
   _NavItem('Markets', '/markets', Icons.candlestick_chart),
   _NavItem('Portfolio', '/portfolio', Icons.account_balance_wallet_outlined),
+  _NavItem('Vaults', '/vaults', Icons.account_balance_outlined),
+  _NavItem('Copy', '/copy-trading', Icons.content_copy_outlined),
   _NavItem('Signals', '/copilot', Icons.auto_awesome_outlined),
   _NavItem('Alerts', '/notifications', Icons.notifications_none),
 ];
@@ -64,6 +68,22 @@ class AppScaffold extends ConsumerWidget {
             SnackBar(
               content: Text(message),
               duration: const Duration(seconds: 6),
+            ),
+          );
+        });
+      });
+    });
+    ref.listen(copyUpdatesProvider, (previous, next) {
+      next.whenData((update) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final type = update['type']?.toString() ?? 'copy_event';
+          final message = type == 'source_trade_copied'
+              ? 'Copied trade executed for market ${update['market_id']}'
+              : 'Copy trading update: $type';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              duration: const Duration(seconds: 5),
             ),
           );
         });

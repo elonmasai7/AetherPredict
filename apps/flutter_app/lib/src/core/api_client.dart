@@ -80,6 +80,99 @@ class ApiClient {
     return payload.map((item) => BundleModel.fromJson(item as Map<String, dynamic>)).toList();
   }
 
+  Future<List<VaultModel>> fetchVaults({String? category}) async {
+    final suffix = category == null ? '' : '?category=$category';
+    final response = await _get('/vaults$suffix');
+    final payload = _decodeList(response, endpoint: '/vaults');
+    return payload.map((item) => VaultModel.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<VaultModel> fetchVaultById(int id) async {
+    final response = await _get('/vaults/$id');
+    return VaultModel.fromJson(_decodeMap(response, endpoint: '/vaults/$id'));
+  }
+
+  Future<List<VaultTrade>> fetchVaultTrades(int vaultId) async {
+    final response = await _get('/vaults/$vaultId/trades');
+    final payload = _decodeList(response, endpoint: '/vaults/$vaultId/trades');
+    return payload.map((item) => VaultTrade.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<VaultPerformancePoint>> fetchVaultPerformance(int vaultId) async {
+    final response = await _get('/vaults/$vaultId/performance');
+    final payload = _decodeList(response, endpoint: '/vaults/$vaultId/performance');
+    return payload.map((item) => VaultPerformancePoint.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<Map<String, dynamic>> depositVault({
+    required int vaultId,
+    required String walletAddress,
+    required double amount,
+  }) async {
+    final response = await _post('/vaults/deposit', {
+      'vault_id': vaultId,
+      'wallet_address': walletAddress,
+      'amount': amount,
+    });
+    return _decodeMap(response, endpoint: '/vaults/deposit');
+  }
+
+  Future<Map<String, dynamic>> withdrawVault({
+    required int vaultId,
+    required String walletAddress,
+    required double amount,
+  }) async {
+    final response = await _post('/vaults/withdraw', {
+      'vault_id': vaultId,
+      'wallet_address': walletAddress,
+      'amount': amount,
+    });
+    return _decodeMap(response, endpoint: '/vaults/withdraw');
+  }
+
+  Future<CopyRelationshipModel> followTrader(Map<String, dynamic> payload) async {
+    final response = await _post('/copy-trading/follow', payload);
+    return CopyRelationshipModel.fromJson(_decodeMap(response, endpoint: '/copy-trading/follow'));
+  }
+
+  Future<CopyRelationshipModel> unfollowTrader(int sourceUserId) async {
+    final response = await _post('/copy-trading/unfollow/$sourceUserId', {});
+    return CopyRelationshipModel.fromJson(_decodeMap(response, endpoint: '/copy-trading/unfollow'));
+  }
+
+  Future<CopyRelationshipModel> updateCopySettings(int relationshipId, Map<String, dynamic> payload) async {
+    final response = await _patch('/copy-trading/settings/$relationshipId', payload);
+    return CopyRelationshipModel.fromJson(_decodeMap(response, endpoint: '/copy-trading/settings/$relationshipId'));
+  }
+
+  Future<List<CopyRelationshipModel>> fetchCopyRelationships() async {
+    final response = await _get('/copy-trading/relationships');
+    final payload = _decodeList(response, endpoint: '/copy-trading/relationships');
+    return payload.map((item) => CopyRelationshipModel.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<CopiedTradeModel>> fetchCopiedTrades() async {
+    final response = await _get('/copy-trading/copied-trades');
+    final payload = _decodeList(response, endpoint: '/copy-trading/copied-trades');
+    return payload.map((item) => CopiedTradeModel.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<CopyPerformanceSnapshotModel>> fetchCopyPerformance(int relationshipId) async {
+    final response = await _get('/copy-trading/performance/$relationshipId');
+    final payload = _decodeList(response, endpoint: '/copy-trading/performance/$relationshipId');
+    return payload.map((item) => CopyPerformanceSnapshotModel.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<CopyRelationshipModel> stopCopying(int relationshipId) async {
+    final response = await _post('/copy-trading/stop/$relationshipId', {});
+    return CopyRelationshipModel.fromJson(_decodeMap(response, endpoint: '/copy-trading/stop/$relationshipId'));
+  }
+
+  Future<CopyPortfolioSummaryModel> fetchCopyPortfolioSummary() async {
+    final response = await _get('/copy-trading/portfolio');
+    return CopyPortfolioSummaryModel.fromJson(_decodeMap(response, endpoint: '/copy-trading/portfolio'));
+  }
+
   Future<InsuranceQuote> fetchInsuranceQuote(String positionId) async {
     final response = await _get('/insurance/quote?position_id=$positionId');
     return InsuranceQuote.fromJson(_decodeMap(response, endpoint: '/insurance/quote'));
@@ -118,6 +211,16 @@ class ApiClient {
         .map((event) => jsonDecode(event as String) as Map<String, dynamic>)
         .where((payload) => payload['type'] == 'tx')
         .map((payload) => TxUpdate.fromJson(payload));
+  }
+
+  Stream<Map<String, dynamic>> vaultUpdates() {
+    final channel = WebSocketChannel.connect(Uri.parse(AppConfig.wsVaultsUrl));
+    return channel.stream.map((event) => jsonDecode(event as String) as Map<String, dynamic>);
+  }
+
+  Stream<Map<String, dynamic>> copyUpdates() {
+    final channel = WebSocketChannel.connect(Uri.parse(AppConfig.wsCopyUrl));
+    return channel.stream.map((event) => jsonDecode(event as String) as Map<String, dynamic>);
   }
 
   Future<PreparedTrade> prepareTrade({
@@ -223,6 +326,31 @@ class ApiClient {
     try {
       final response = await http
           .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
+      _ensureSuccess(response, endpoint: endpoint);
+      return response;
+    } on SocketException {
+      throw ApiException('Cannot reach server at ${uri.host}:${uri.port}');
+    } on HttpException catch (error) {
+      throw ApiException('Network error on $endpoint: $error');
+    } on FormatException {
+      throw ApiException('Malformed URL for endpoint $endpoint');
+    } on ApiException {
+      rethrow;
+    } catch (error) {
+      throw ApiException('Unexpected request failure on $endpoint: $error');
+    }
+  }
+
+  Future<http.Response> _patch(String endpoint, Map<String, dynamic> body) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
+    try {
+      final response = await http
+          .patch(
             uri,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),

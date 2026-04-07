@@ -1,6 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
-from app.schemas.blockchain import BlockchainCreateMarketRequest, BlockchainTxRequest, BlockchainTxResponse
+from app.schemas.blockchain import (
+    BlockchainCreateMarketRequest,
+    BlockchainCreateVaultRequest,
+    BlockchainTxRequest,
+    BlockchainTxResponse,
+    Erc20ApproveRequest,
+    VaultTxRequest,
+)
 from app.services.blockchain_service import BlockchainService
 from app.services.auth_service import get_optional_user
 
@@ -65,4 +72,73 @@ def create_market(payload: BlockchainCreateMarketRequest, user=Depends(get_optio
         payload.expiry,
         payload.creation_fee_wei,
     )
+    return BlockchainTxResponse(tx=_tx_payload(built))
+
+
+@router.post("/vaults/create", response_model=BlockchainTxResponse)
+def create_vault(payload: BlockchainCreateVaultRequest, user=Depends(get_optional_user)) -> BlockchainTxResponse:
+    chain = BlockchainService()
+    built = chain.build_create_vault(
+        payload.wallet_address,
+        payload.manager_address,
+        payload.collateral_token,
+        payload.title,
+        payload.strategy_description,
+        payload.risk_profile,
+        payload.manager_type,
+        payload.management_fee_bps,
+        payload.performance_fee_bps,
+        payload.share_name,
+        payload.share_symbol,
+    )
+    return BlockchainTxResponse(tx=_tx_payload(built))
+
+
+@router.post("/vaults/deposit", response_model=BlockchainTxResponse)
+def vault_deposit(payload: VaultTxRequest, user=Depends(get_optional_user)) -> BlockchainTxResponse:
+    chain = BlockchainService()
+    built = chain.build_vault_deposit(payload.vault_address, payload.wallet_address, payload.amount_wei)
+    return BlockchainTxResponse(tx=_tx_payload(built))
+
+
+@router.post("/vaults/withdraw", response_model=BlockchainTxResponse)
+def vault_withdraw(payload: VaultTxRequest, user=Depends(get_optional_user)) -> BlockchainTxResponse:
+    chain = BlockchainService()
+    built = chain.build_vault_withdraw(payload.vault_address, payload.wallet_address, payload.share_amount_wei)
+    return BlockchainTxResponse(tx=_tx_payload(built))
+
+
+@router.post("/vaults/execute-trade", response_model=BlockchainTxResponse)
+def vault_execute_trade(payload: VaultTxRequest, user=Depends(get_optional_user)) -> BlockchainTxResponse:
+    if not payload.market_address or not payload.action:
+        raise HTTPException(status_code=400, detail="market_address and action are required")
+    chain = BlockchainService()
+    built = chain.build_vault_execute_trade(
+        payload.vault_address,
+        payload.wallet_address,
+        payload.market_address,
+        payload.action,
+        payload.amount_wei,
+    )
+    return BlockchainTxResponse(tx=_tx_payload(built))
+
+
+@router.post("/vaults/rebalance", response_model=BlockchainTxResponse)
+def vault_rebalance(payload: VaultTxRequest, user=Depends(get_optional_user)) -> BlockchainTxResponse:
+    chain = BlockchainService()
+    built = chain.build_vault_rebalance(payload.vault_address, payload.wallet_address)
+    return BlockchainTxResponse(tx=_tx_payload(built))
+
+
+@router.post("/vaults/distribute-returns", response_model=BlockchainTxResponse)
+def vault_distribute(payload: VaultTxRequest, user=Depends(get_optional_user)) -> BlockchainTxResponse:
+    chain = BlockchainService()
+    built = chain.build_vault_distribute_returns(payload.vault_address, payload.wallet_address, payload.amount_wei)
+    return BlockchainTxResponse(tx=_tx_payload(built))
+
+
+@router.post("/erc20/approve", response_model=BlockchainTxResponse)
+def approve_erc20(payload: Erc20ApproveRequest, user=Depends(get_optional_user)) -> BlockchainTxResponse:
+    chain = BlockchainService()
+    built = chain.build_erc20_approve(payload.token_address, payload.wallet_address, payload.spender, payload.amount_wei)
     return BlockchainTxResponse(tx=_tx_payload(built))

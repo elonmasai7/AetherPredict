@@ -23,12 +23,20 @@ class Settings(BaseSettings):
     hashkey_private_key: str = ""
     treasury_address: str = ""
     hashkey_factory_address: str = ""
+    hashkey_vault_factory_address: str = ""
     hashkey_usdc_address: str = ""
     hashkey_usdt_address: str = ""
     tx_websocket_channel: str = "aetherpredict:tx_updates"
+    vault_websocket_channel: str = "aetherpredict:vault_updates"
+    copy_websocket_channel: str = "aetherpredict:copy_updates"
+    vault_websocket_channel: str = "aetherpredict:vault_updates"
+    copy_websocket_channel: str = "aetherpredict:copy_updates"
     hashkey_explorer_url: str = "https://explorer.hashkeychain.example"
     websocket_channel: str = "aetherpredict:market_updates"
     walletconnect_project_id: str = ""
+    vault_auto_execute_default_slugs: list[str] = []
+    vault_auto_execute_allowlist_ids: list[int] = []
+    vault_auto_execute_allowlist_manager_roles: list[str] = []
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -37,6 +45,24 @@ class Settings(BaseSettings):
     def _split_fallbacks(cls, value):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator(
+        "vault_auto_execute_default_slugs",
+        "vault_auto_execute_allowlist_manager_roles",
+        mode="before",
+    )
+    @classmethod
+    def _split_csv(cls, value):
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("vault_auto_execute_allowlist_ids", mode="before")
+    @classmethod
+    def _split_csv_int(cls, value):
+        if isinstance(value, str):
+            return [int(item.strip()) for item in value.split(",") if item.strip()]
         return value
 
 

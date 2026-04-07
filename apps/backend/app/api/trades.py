@@ -1,3 +1,7 @@
+import asyncio
+
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,7 +11,9 @@ from app.models.entities import Market, Notification, PortfolioPosition, TradeOr
 from app.core.config import settings
 from app.schemas.trade import CreateTradeRequest, PrepareTradeRequest, PrepareTradeResponse, TradeResponse
 from app.services.auth_service import get_current_user, get_optional_user, get_or_create_wallet_user
+from app.services.copy_trading_service import CopyTradingService
 from app.services.blockchain_service import BlockchainService
+from app.services.copy_trading_service import CopyTradingService
 
 router = APIRouter(prefix="/trades", tags=["trades"])
 
@@ -126,6 +132,26 @@ def create_trade(payload: CreateTradeRequest, db: Session = Depends(get_db), use
     market.volume += payload.collateral_amount
     db.commit()
     db.refresh(trade)
+    try:
+        copy_service = CopyTradingService(db)
+        copied_rows = copy_service.process_source_trade(trade)
+        if copied_rows:
+            status_breakdown: dict[str, int] = {}
+            for row in copied_rows:
+                status_breakdown[row.status] = status_breakdown.get(row.status, 0) + 1
+            asyncio.create_task(
+                copy_service.publish_copy_event(
+                    "source_trade_copied",
+                    {
+                        "source_trade_id": trade.id,
+                        "market_id": trade.market_id,
+                        "copied_count": len(copied_rows),
+                        "status_breakdown": status_breakdown,
+                    },
+                )
+            )
+    except Exception:
+        pass
     return TradeResponse.model_validate(trade, from_attributes=True)
 
 

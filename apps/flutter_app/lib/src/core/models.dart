@@ -349,27 +349,45 @@ class DisputeHistoryEntry {
 class LeaderboardEntry {
   const LeaderboardEntry({
     required this.rank,
+    required this.userId,
     required this.name,
     required this.score,
     required this.roi,
+    required this.roi7d,
+    required this.roi30d,
     required this.winRate,
+    required this.lifetimeAccuracy,
+    required this.copiedFollowers,
+    required this.assetsCopied,
     required this.period,
   });
 
   final int rank;
+  final int? userId;
   final String name;
   final double score;
   final double roi;
+  final double roi7d;
+  final double roi30d;
   final double winRate;
+  final double lifetimeAccuracy;
+  final int copiedFollowers;
+  final double assetsCopied;
   final String period;
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) {
     return LeaderboardEntry(
       rank: json['rank'] as int,
+      userId: json['user_id'] as int?,
       name: json['name'] as String,
       score: (json['score'] as num).toDouble(),
       roi: (json['roi'] as num).toDouble(),
+      roi7d: (json['roi_7d'] as num?)?.toDouble() ?? 0,
+      roi30d: (json['roi_30d'] as num?)?.toDouble() ?? 0,
       winRate: (json['win_rate'] as num).toDouble(),
+      lifetimeAccuracy: (json['lifetime_accuracy'] as num?)?.toDouble() ?? 0,
+      copiedFollowers: (json['copied_followers'] as num?)?.toInt() ?? 0,
+      assetsCopied: (json['assets_copied'] as num?)?.toDouble() ?? 0,
       period: json['period'] as String,
     );
   }
@@ -519,6 +537,306 @@ class DiscussionComment {
       upvotes: json['upvotes'] as int,
       evidenceUrl: json['evidence_url'] as String?,
       parentId: json['parent_id'] as int?,
+    );
+  }
+}
+
+class VaultModel {
+  const VaultModel({
+    required this.id,
+    required this.title,
+    required this.slug,
+    required this.strategyDescription,
+    required this.riskProfile,
+    required this.collateralTokenDecimals,
+    required this.autoExecuteEnabled,
+    required this.targetMarkets,
+    required this.performanceHistory,
+    required this.currentAllocation,
+    required this.aiConfidenceScore,
+    required this.managerType,
+    required this.roi7d,
+    required this.roi30d,
+    required this.winRate,
+    required this.volatility,
+    required this.activeSubscribers,
+    required this.totalAum,
+    required this.status,
+  });
+
+  final int id;
+  final String title;
+  final String slug;
+  final String strategyDescription;
+  final String riskProfile;
+  final int collateralTokenDecimals;
+  final bool autoExecuteEnabled;
+  final List<String> targetMarkets;
+  final List<Map<String, dynamic>> performanceHistory;
+  final Map<String, dynamic> currentAllocation;
+  final double aiConfidenceScore;
+  final String managerType;
+  final double roi7d;
+  final double roi30d;
+  final double winRate;
+  final double volatility;
+  final int activeSubscribers;
+  final double totalAum;
+  final String status;
+
+  factory VaultModel.fromJson(Map<String, dynamic> json) {
+    return VaultModel(
+      id: json['id'] as int,
+      title: json['title'] as String,
+      slug: json['slug'] as String,
+      strategyDescription: json['strategy_description'] as String,
+      riskProfile: json['risk_profile'] as String,
+      collateralTokenDecimals: (json['collateral_token_decimals'] as num?)?.toInt() ?? 18,
+      autoExecuteEnabled: (json['auto_execute_enabled'] as bool?) ?? false,
+      targetMarkets: (json['target_markets'] as List<dynamic>? ?? []).cast<String>(),
+      performanceHistory: (json['performance_history'] as List<dynamic>? ?? [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList(),
+      currentAllocation: Map<String, dynamic>.from(json['current_allocation'] as Map? ?? {}),
+      aiConfidenceScore: (json['ai_confidence_score'] as num).toDouble(),
+      managerType: json['manager_type'] as String,
+      roi7d: (json['roi_7d'] as num).toDouble(),
+      roi30d: (json['roi_30d'] as num).toDouble(),
+      winRate: (json['win_rate'] as num).toDouble(),
+      volatility: (json['volatility'] as num).toDouble(),
+      activeSubscribers: (json['active_subscribers'] as num).toInt(),
+      totalAum: (json['total_aum'] as num).toDouble(),
+      status: json['status'] as String,
+    );
+  }
+}
+
+class VaultTrade {
+  const VaultTrade({
+    required this.id,
+    required this.vaultId,
+    required this.marketId,
+    required this.side,
+    required this.allocation,
+    required this.amount,
+    required this.price,
+    required this.confidence,
+    required this.reasoning,
+    required this.status,
+    required this.createdAt,
+    this.txHash,
+  });
+
+  final int id;
+  final int vaultId;
+  final int marketId;
+  final String side;
+  final double allocation;
+  final double amount;
+  final double price;
+  final double confidence;
+  final String reasoning;
+  final String status;
+  final String createdAt;
+  final String? txHash;
+
+  factory VaultTrade.fromJson(Map<String, dynamic> json) {
+    return VaultTrade(
+      id: json['id'] as int,
+      vaultId: json['vault_id'] as int,
+      marketId: json['market_id'] as int,
+      side: json['side'] as String,
+      allocation: (json['allocation'] as num).toDouble(),
+      amount: (json['amount'] as num).toDouble(),
+      price: (json['price'] as num).toDouble(),
+      confidence: (json['confidence'] as num).toDouble(),
+      reasoning: json['reasoning'] as String,
+      status: json['status'] as String,
+      txHash: json['tx_hash'] as String?,
+      createdAt: json['created_at'] as String,
+    );
+  }
+}
+
+class VaultPerformancePoint {
+  const VaultPerformancePoint({
+    required this.timestamp,
+    required this.navPerShare,
+    required this.aum,
+    required this.roiPeriod,
+    required this.winRate,
+    required this.volatility,
+    required this.confidence,
+  });
+
+  final String timestamp;
+  final double navPerShare;
+  final double aum;
+  final double roiPeriod;
+  final double winRate;
+  final double volatility;
+  final double confidence;
+
+  factory VaultPerformancePoint.fromJson(Map<String, dynamic> json) {
+    return VaultPerformancePoint(
+      timestamp: json['timestamp'] as String,
+      navPerShare: (json['nav_per_share'] as num).toDouble(),
+      aum: (json['aum'] as num).toDouble(),
+      roiPeriod: (json['roi_period'] as num).toDouble(),
+      winRate: (json['win_rate'] as num).toDouble(),
+      volatility: (json['volatility'] as num).toDouble(),
+      confidence: (json['confidence'] as num).toDouble(),
+    );
+  }
+}
+
+class CopyRelationshipModel {
+  const CopyRelationshipModel({
+    required this.id,
+    required this.followerUserId,
+    required this.sourceUserId,
+    required this.sourceType,
+    required this.status,
+    required this.allocationPct,
+    required this.maxLossPct,
+    required this.riskLevel,
+    required this.autoStopThreshold,
+    required this.maxFollowerExposure,
+    required this.traderCommissionBps,
+    required this.platformFeeBps,
+    required this.allowedMarketIds,
+  });
+
+  final int id;
+  final int followerUserId;
+  final int sourceUserId;
+  final String sourceType;
+  final String status;
+  final double allocationPct;
+  final double maxLossPct;
+  final String riskLevel;
+  final double autoStopThreshold;
+  final double maxFollowerExposure;
+  final int traderCommissionBps;
+  final int platformFeeBps;
+  final List<int> allowedMarketIds;
+
+  factory CopyRelationshipModel.fromJson(Map<String, dynamic> json) {
+    return CopyRelationshipModel(
+      id: json['id'] as int,
+      followerUserId: json['follower_user_id'] as int,
+      sourceUserId: json['source_user_id'] as int,
+      sourceType: json['source_type'] as String,
+      status: json['status'] as String,
+      allocationPct: (json['allocation_pct'] as num).toDouble(),
+      maxLossPct: (json['max_loss_pct'] as num).toDouble(),
+      riskLevel: json['risk_level'] as String,
+      autoStopThreshold: (json['auto_stop_threshold'] as num).toDouble(),
+      maxFollowerExposure: (json['max_follower_exposure'] as num).toDouble(),
+      traderCommissionBps: (json['trader_commission_bps'] as num).toInt(),
+      platformFeeBps: (json['platform_fee_bps'] as num).toInt(),
+      allowedMarketIds: (json['allowed_market_ids'] as List<dynamic>? ?? []).cast<int>(),
+    );
+  }
+}
+
+class CopiedTradeModel {
+  const CopiedTradeModel({
+    required this.id,
+    required this.relationshipId,
+    required this.sourceTradeId,
+    required this.marketId,
+    required this.copiedAllocation,
+    required this.copiedAmount,
+    required this.status,
+    required this.createdAt,
+    this.followerTradeId,
+    this.reason,
+  });
+
+  final int id;
+  final int relationshipId;
+  final int sourceTradeId;
+  final int? followerTradeId;
+  final int marketId;
+  final double copiedAllocation;
+  final double copiedAmount;
+  final String status;
+  final String createdAt;
+  final String? reason;
+
+  factory CopiedTradeModel.fromJson(Map<String, dynamic> json) {
+    return CopiedTradeModel(
+      id: json['id'] as int,
+      relationshipId: json['relationship_id'] as int,
+      sourceTradeId: json['source_trade_id'] as int,
+      followerTradeId: json['follower_trade_id'] as int?,
+      marketId: json['market_id'] as int,
+      copiedAllocation: (json['copied_allocation'] as num).toDouble(),
+      copiedAmount: (json['copied_amount'] as num).toDouble(),
+      status: json['status'] as String,
+      reason: json['reason'] as String?,
+      createdAt: json['created_at'] as String,
+    );
+  }
+}
+
+class CopyPerformanceSnapshotModel {
+  const CopyPerformanceSnapshotModel({
+    required this.timestamp,
+    required this.roi7d,
+    required this.roi30d,
+    required this.lifetimeAccuracy,
+    required this.copiedFollowers,
+    required this.assetsCopied,
+    required this.drawdownPct,
+  });
+
+  final String timestamp;
+  final double roi7d;
+  final double roi30d;
+  final double lifetimeAccuracy;
+  final int copiedFollowers;
+  final double assetsCopied;
+  final double drawdownPct;
+
+  factory CopyPerformanceSnapshotModel.fromJson(Map<String, dynamic> json) {
+    return CopyPerformanceSnapshotModel(
+      timestamp: json['timestamp'] as String,
+      roi7d: (json['roi_7d'] as num).toDouble(),
+      roi30d: (json['roi_30d'] as num).toDouble(),
+      lifetimeAccuracy: (json['lifetime_accuracy'] as num).toDouble(),
+      copiedFollowers: (json['copied_followers'] as num).toInt(),
+      assetsCopied: (json['assets_copied'] as num).toDouble(),
+      drawdownPct: (json['drawdown_pct'] as num).toDouble(),
+    );
+  }
+}
+
+class CopyPortfolioSummaryModel {
+  const CopyPortfolioSummaryModel({
+    required this.copiedTraders,
+    required this.liveCopiedPositions,
+    required this.copiedRoi,
+    required this.activeAlerts,
+    required this.performanceByTrader,
+  });
+
+  final int copiedTraders;
+  final int liveCopiedPositions;
+  final double copiedRoi;
+  final int activeAlerts;
+  final List<Map<String, dynamic>> performanceByTrader;
+
+  factory CopyPortfolioSummaryModel.fromJson(Map<String, dynamic> json) {
+    return CopyPortfolioSummaryModel(
+      copiedTraders: (json['copied_traders'] as num).toInt(),
+      liveCopiedPositions: (json['live_copied_positions'] as num).toInt(),
+      copiedRoi: (json['copied_roi'] as num).toDouble(),
+      activeAlerts: (json['active_alerts'] as num).toInt(),
+      performanceByTrader: (json['performance_by_trader'] as List<dynamic>? ?? [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList(),
     );
   }
 }

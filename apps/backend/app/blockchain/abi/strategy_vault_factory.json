@@ -1,0 +1,52 @@
+[
+  {
+    "type": "function",
+    "name": "createVault",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {"name": "manager", "type": "address"},
+      {"name": "collateralToken", "type": "address"},
+      {"name": "title", "type": "string"},
+      {"name": "strategyDescription", "type": "string"},
+      {"name": "riskProfile", "type": "string"},
+      {"name": "managerType", "type": "string"},
+      {"name": "managementFeeBps", "type": "uint256"},
+      {"name": "performanceFeeBps", "type": "uint256"},
+      {"name": "shareName", "type": "string"},
+      {"name": "shareSymbol", "type": "string"}
+    ],
+    "outputs": [
+      {"name": "vaultId", "type": "uint256"},
+      {"name": "vaultAddress", "type": "address"}
+    ]
+  },
+  {
+    "type": "function",
+    "name": "pauseVault",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {"name": "vaultId", "type": "uint256"},
+      {"name": "paused", "type": "bool"}
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "archiveVault",
+    "stateMutability": "nonpayable",
+    "inputs": [{"name": "vaultId", "type": "uint256"}],
+    "outputs": []
+  },
+  {
+    "type": "event",
+    "name": "VaultCreated",
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "name": "vaultId", "type": "uint256"},
+      {"indexed": true, "name": "vault", "type": "address"},
+      {"indexed": false, "name": "title", "type": "string"},
+      {"indexed": false, "name": "riskProfile", "type": "string"},
+      {"indexed": false, "name": "managerType", "type": "string"}
+    ]
+  }
+]

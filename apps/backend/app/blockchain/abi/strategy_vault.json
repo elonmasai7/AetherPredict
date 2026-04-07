@@ -1,0 +1,61 @@
+[
+  {
+    "type": "function",
+    "name": "deposit",
+    "stateMutability": "nonpayable",
+    "inputs": [{"name": "amount", "type": "uint256"}],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "withdraw",
+    "stateMutability": "nonpayable",
+    "inputs": [{"name": "shareAmount", "type": "uint256"}],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "executeTrade",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {"name": "market", "type": "address"},
+      {"name": "action", "type": "bytes32"},
+      {"name": "amount", "type": "uint256"}
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "rebalance",
+    "stateMutability": "nonpayable",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "distributeReturns",
+    "stateMutability": "nonpayable",
+    "inputs": [{"name": "grossReturn", "type": "uint256"}],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "getVaultPerformance",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "components": [
+          {"name": "totalDeposits", "type": "uint256"},
+          {"name": "totalWithdrawals", "type": "uint256"},
+          {"name": "totalReturnsDistributed", "type": "uint256"},
+          {"name": "navPerShareWad", "type": "uint256"},
+          {"name": "aum", "type": "uint256"},
+          {"name": "lastUpdated", "type": "uint256"}
+        ]
+      }
+    ]
+  }
+]

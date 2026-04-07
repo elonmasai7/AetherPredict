@@ -8,7 +8,16 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.core.config import settings
-from app.models.entities import ChainTransaction, Dispute, Market, PortfolioPosition, TradeOrder, TransactionRecord
+from app.models.entities import (
+    ChainTransaction,
+    CopiedTrade,
+    Dispute,
+    Market,
+    PortfolioPosition,
+    StrategyVault,
+    TradeOrder,
+    TransactionRecord,
+)
 from app.services.blockchain_service import BlockchainService
 from app.services.redis_bus import publish
 
@@ -68,12 +77,21 @@ async def tx_receipt_worker() -> None:
                 if receipt is None:
                     continue
                 tx.status = "CONFIRMED" if receipt.get("status", 0) == 1 else "REVERTED"
+                tx.metadata_json = {**(tx.metadata_json or {}), "receipt": receipt}
                 if tx.tx_type == "MARKET_CREATE":
                     events = chain.parse_factory_events(receipt)
                     if events and tx.market_id:
                         market = db.scalar(select(Market).where(Market.id == tx.market_id))
                         if market:
                             market.on_chain_address = events[0]["args"].get("market")
+                    tx.metadata_json = {**(tx.metadata_json or {}), "event_logs": events}
+                if tx.tx_type == "VAULT_CREATE":
+                    events = chain.parse_vault_factory_events(receipt)
+                    vault_id = (tx.metadata_json or {}).get("vault_id")
+                    if events and vault_id:
+                        vault = db.scalar(select(StrategyVault).where(StrategyVault.id == vault_id))
+                        if vault:
+                            vault.on_chain_address = events[0]["args"].get("vault")
                     tx.metadata_json = {**(tx.metadata_json or {}), "event_logs": events}
                 if tx.tx_type == "DISPUTE" and tx.market_id:
                     market = db.scalar(select(Market).where(Market.id == tx.market_id))
@@ -95,6 +113,39 @@ async def tx_receipt_worker() -> None:
                             )
                         )
                 db.commit()
+                if tx.tx_type in {"VAULT_CREATE", "VAULT_DEPOSIT", "VAULT_WITHDRAW", "VAULT_EXECUTE", "VAULT_REBALANCE", "VAULT_DISTRIBUTE"}:
+                    await publish(
+                        settings.vault_websocket_channel,
+                        {
+                            "type": "vault_tx",
+                            "tx_id": tx.id,
+                            "status": tx.status,
+                            "tx_hash": tx.tx_hash,
+                            "vault_id": (tx.metadata_json or {}).get("vault_id"),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                if tx.tx_type == "COPY_TRADE":
+                    copied_id = (tx.metadata_json or {}).get("copied_trade_id")
+                    follower_trade_id = (tx.metadata_json or {}).get("follower_trade_id")
+                    if follower_trade_id:
+                        trade = db.scalar(select(TradeOrder).where(TradeOrder.id == follower_trade_id))
+                        if trade:
+                            trade.status = "CONFIRMED" if tx.status == "CONFIRMED" else "REVERTED"
+                    if copied_id:
+                        copied = db.scalar(select(CopiedTrade).where(CopiedTrade.id == copied_id))
+                        if copied:
+                            copied.status = "CONFIRMED" if tx.status == "CONFIRMED" else "REVERTED"
+                    await publish(
+                        settings.copy_websocket_channel,
+                        {
+                            "type": "copy_tx",
+                            "tx_id": tx.id,
+                            "status": tx.status,
+                            "tx_hash": tx.tx_hash,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
                 await publish(
                     settings.tx_websocket_channel,
                     {

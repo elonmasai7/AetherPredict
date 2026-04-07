@@ -7,6 +7,7 @@ import {TreasuryVault} from "../src/TreasuryVault.sol";
 import {ReputationStaking} from "../src/ReputationStaking.sol";
 import {BundleVault} from "../src/BundleVault.sol";
 import {InsurancePool} from "../src/InsurancePool.sol";
+import {StrategyVaultFactory} from "../src/StrategyVaultFactory.sol";
 
 contract DeployAetherPredict is Script {
     function run() external {
@@ -18,12 +19,14 @@ contract DeployAetherPredict is Script {
         MarketFactory factory = new MarketFactory(msg.sender, 0.01 ether);
         BundleVault bundleVault = new BundleVault(msg.sender);
         InsurancePool insurancePool = new InsurancePool(msg.sender);
+        StrategyVaultFactory vaultFactory = new StrategyVaultFactory(msg.sender);
 
         treasury;
         reputation;
         factory;
         bundleVault;
         insurancePool;
+        vaultFactory;
 
         vm.stopBroadcast();
     }

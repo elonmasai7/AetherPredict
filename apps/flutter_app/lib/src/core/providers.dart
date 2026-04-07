@@ -42,6 +42,34 @@ final traderLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) a
 final agentLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async => ref.read(apiClientProvider).fetchLeaderboard('agents'));
 final jurorLeaderboardProvider = FutureProvider<List<LeaderboardEntry>>((ref) async => ref.read(apiClientProvider).fetchLeaderboard('jurors'));
 final bundleProvider = FutureProvider<List<BundleModel>>((ref) async => ref.read(apiClientProvider).fetchBundles());
+final vaultProvider = FutureProvider<List<VaultModel>>((ref) async => ref.read(apiClientProvider).fetchVaults());
+final topVaultsProvider = FutureProvider<List<VaultModel>>((ref) async => ref.read(apiClientProvider).fetchVaults(category: 'top-performing'));
+final lowRiskVaultsProvider = FutureProvider<List<VaultModel>>((ref) async => ref.read(apiClientProvider).fetchVaults(category: 'low-risk'));
+final aiVaultsProvider = FutureProvider<List<VaultModel>>((ref) async => ref.read(apiClientProvider).fetchVaults(category: 'ai-managed'));
+final humanVaultsProvider = FutureProvider<List<VaultModel>>((ref) async => ref.read(apiClientProvider).fetchVaults(category: 'human-managed'));
+final vaultDetailProvider = FutureProvider.family<VaultModel, int>((ref, vaultId) async {
+  return ref.read(apiClientProvider).fetchVaultById(vaultId);
+});
+final vaultTradesProvider = FutureProvider.family<List<VaultTrade>, int>((ref, vaultId) async {
+  return ref.read(apiClientProvider).fetchVaultTrades(vaultId);
+});
+final vaultPerformanceProvider = FutureProvider.family<List<VaultPerformancePoint>, int>((ref, vaultId) async {
+  return ref.read(apiClientProvider).fetchVaultPerformance(vaultId);
+});
+final copyRelationshipsProvider = FutureProvider<List<CopyRelationshipModel>>((ref) async {
+  return ref.read(apiClientProvider).fetchCopyRelationships();
+});
+final copiedTradesProvider = FutureProvider<List<CopiedTradeModel>>((ref) async {
+  return ref.read(apiClientProvider).fetchCopiedTrades();
+});
+final copyPortfolioProvider = FutureProvider<CopyPortfolioSummaryModel>((ref) async {
+  return ref.read(apiClientProvider).fetchCopyPortfolioSummary();
+});
+final copyPerformanceProvider = FutureProvider.family<List<CopyPerformanceSnapshotModel>, int>((ref, relationshipId) async {
+  return ref.read(apiClientProvider).fetchCopyPerformance(relationshipId);
+});
+final vaultUpdatesProvider = StreamProvider<Map<String, dynamic>>((ref) => ref.read(apiClientProvider).vaultUpdates());
+final copyUpdatesProvider = StreamProvider<Map<String, dynamic>>((ref) => ref.read(apiClientProvider).copyUpdates());
 final insuranceQuoteProvider = FutureProvider<InsuranceQuote>((ref) async => ref.read(apiClientProvider).fetchInsuranceQuote('0'));
 final autoHedgeProvider = FutureProvider<AutoHedgePlan>((ref) async {
   final market = await ref.watch(selectedMarketFutureProvider.future);

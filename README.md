@@ -13,6 +13,8 @@ AetherPredict is a production-oriented decentralized prediction market platform 
 ## Core capabilities
 
 - Create and trade on-chain YES/NO markets
+- Operate Strategy Vaults with AI- or human-managed execution and on-chain verification
+- Enable copy trading with proportional risk controls and real-time replication
 - Stream live probabilities and AI confidence updates
 - Monitor autonomous liquidity and sentinel agents
 - Submit disputes and review evidence
@@ -50,6 +52,13 @@ AetherPredict is a production-oriented decentralized prediction market platform 
 - The backend no longer seeds demo data at startup; production data comes from real user actions, persisted records, and live market sync jobs
 - Redis is used for market update pub/sub and websocket fanout on `/ws/markets`
 - Backend startup now fails fast if Alembic migrations have not been applied
+
+## Strategy Vaults and Copy Trading
+
+- Vaults support `auto_execute_enabled` with allowlist enforcement for automated strategy execution.
+- Configure allowlists via `.env`: `VAULT_AUTO_EXECUTE_DEFAULT_SLUGS`, `VAULT_AUTO_EXECUTE_ALLOWLIST_IDS`, `VAULT_AUTO_EXECUTE_ALLOWLIST_MANAGER_ROLES`.
+- Vault collateral decimals are pulled from ERC-20 `decimals()` at creation time and cached in-process for faster onboarding.
+- New endpoint: `POST /vaults/{vault_id}/auto-execute` with body `{ "auto_execute_enabled": true }` (requires `admin` or `manager` role).
 
 ## Local verification
 

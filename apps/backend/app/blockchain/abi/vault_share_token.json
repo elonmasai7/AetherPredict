@@ -1,0 +1,39 @@
+[
+  {
+    "type": "function",
+    "name": "mint",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {"name": "to", "type": "address"},
+      {"name": "amount", "type": "uint256"}
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "burn",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {"name": "from", "type": "address"},
+      {"name": "amount", "type": "uint256"}
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "setNavPerShare",
+    "stateMutability": "nonpayable",
+    "inputs": [{"name": "navWad", "type": "uint256"}],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "calculateNav",
+    "stateMutability": "pure",
+    "inputs": [
+      {"name": "totalVaultValue", "type": "uint256"},
+      {"name": "totalShares", "type": "uint256"}
+    ],
+    "outputs": [{"name": "", "type": "uint256"}]
+  }
+]

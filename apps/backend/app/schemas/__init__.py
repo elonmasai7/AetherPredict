@@ -7,6 +7,7 @@ __all__ = [
     "bundle",
     "common",
     "copilot",
+    "copy_trading",
     "dispute",
     "discussion",
     "hedge",
@@ -17,6 +18,7 @@ __all__ = [
     "portfolio",
     "risk",
     "trade",
+    "vault",
     "watchlist",
     "workspace",
 ]

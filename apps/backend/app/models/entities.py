@@ -49,6 +49,16 @@ class User(Base):
     ai_signals: Mapped[list["AISignal"]] = relationship(back_populates="user")
     wallet_balances: Mapped[list["WalletBalance"]] = relationship(back_populates="user")
     comments: Mapped[list["DiscussionComment"]] = relationship(back_populates="user")
+    managed_vaults: Mapped[list["StrategyVault"]] = relationship(back_populates="manager")
+    vault_subscriptions: Mapped[list["VaultSubscription"]] = relationship(back_populates="user")
+    copy_following: Mapped[list["CopyRelationship"]] = relationship(
+        back_populates="follower",
+        foreign_keys="CopyRelationship.follower_user_id",
+    )
+    copy_followers: Mapped[list["CopyRelationship"]] = relationship(
+        back_populates="source",
+        foreign_keys="CopyRelationship.source_user_id",
+    )
 
 
 class RefreshToken(Base):
@@ -314,6 +324,200 @@ class AISignal(Base):
 
     user: Mapped[User | None] = relationship(back_populates="ai_signals")
     market: Mapped[Market | None] = relationship(back_populates="signals")
+
+
+class StrategyVault(Base, TimestampMixin):
+    __tablename__ = "strategy_vaults"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(160), index=True)
+    slug: Mapped[str] = mapped_column(String(180), unique=True, index=True)
+    strategy_description: Mapped[str] = mapped_column(Text)
+    risk_profile: Mapped[str] = mapped_column(String(30), default="MEDIUM")
+    manager_type: Mapped[str] = mapped_column(String(20), default="AI")
+    manager_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(30), default="ACTIVE", index=True)
+    on_chain_address: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    share_token_address: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    collateral_token_address: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    collateral_token_decimals: Mapped[int] = mapped_column(Integer, default=18)
+    auto_execute_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    target_markets_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    current_allocation_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    performance_history_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    ai_confidence_score: Mapped[float] = mapped_column(Float, default=0.5)
+    total_aum: Mapped[float] = mapped_column(Float, default=0)
+    nav_per_share: Mapped[float] = mapped_column(Float, default=1.0)
+    active_subscribers: Mapped[int] = mapped_column(Integer, default=0)
+    roi_7d: Mapped[float] = mapped_column(Float, default=0)
+    roi_30d: Mapped[float] = mapped_column(Float, default=0)
+    win_rate: Mapped[float] = mapped_column(Float, default=0)
+    volatility: Mapped[float] = mapped_column(Float, default=0)
+    management_fee_bps: Mapped[int] = mapped_column(Integer, default=200)
+    performance_fee_bps: Mapped[int] = mapped_column(Integer, default=1500)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    manager: Mapped[User | None] = relationship(back_populates="managed_vaults")
+    subscriptions: Mapped[list["VaultSubscription"]] = relationship(back_populates="vault")
+    trades: Mapped[list["VaultTrade"]] = relationship(back_populates="vault")
+    snapshots: Mapped[list["VaultPerformanceSnapshot"]] = relationship(back_populates="vault")
+    markets: Mapped[list["VaultMarket"]] = relationship(back_populates="vault")
+
+
+class VaultMarket(Base):
+    __tablename__ = "vault_markets"
+    __table_args__ = (UniqueConstraint("vault_id", "market_id", name="uq_vault_market"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    vault_id: Mapped[int] = mapped_column(ForeignKey("strategy_vaults.id"), index=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), index=True)
+    weight: Mapped[float] = mapped_column(Float, default=0)
+    max_allocation_pct: Mapped[float] = mapped_column(Float, default=1.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    vault: Mapped["StrategyVault"] = relationship(back_populates="markets")
+    market: Mapped["Market"] = relationship()
+
+
+class VaultSubscription(Base, TimestampMixin):
+    __tablename__ = "vault_subscriptions"
+    __table_args__ = (UniqueConstraint("vault_id", "user_id", name="uq_vault_subscription"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    vault_id: Mapped[int] = mapped_column(ForeignKey("strategy_vaults.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    wallet_address: Mapped[str] = mapped_column(String(120), index=True)
+    deposited_amount: Mapped[float] = mapped_column(Float, default=0)
+    share_balance: Mapped[float] = mapped_column(Float, default=0)
+    realized_pnl: Mapped[float] = mapped_column(Float, default=0)
+    unrealized_pnl: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(30), default="ACTIVE")
+    auto_compound: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    vault: Mapped["StrategyVault"] = relationship(back_populates="subscriptions")
+    user: Mapped["User"] = relationship(back_populates="vault_subscriptions")
+
+
+class VaultTrade(Base):
+    __tablename__ = "vault_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    vault_id: Mapped[int] = mapped_column(ForeignKey("strategy_vaults.id"), index=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), index=True)
+    side: Mapped[str] = mapped_column(String(10))
+    allocation: Mapped[float] = mapped_column(Float, default=0)
+    amount: Mapped[float] = mapped_column(Float, default=0)
+    price: Mapped[float] = mapped_column(Float, default=0)
+    confidence: Mapped[float] = mapped_column(Float, default=0)
+    reasoning: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="EXECUTED")
+    tx_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    vault: Mapped["StrategyVault"] = relationship(back_populates="trades")
+    market: Mapped["Market"] = relationship()
+
+
+class VaultPerformanceSnapshot(Base):
+    __tablename__ = "vault_performance_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    vault_id: Mapped[int] = mapped_column(ForeignKey("strategy_vaults.id"), index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    nav_per_share: Mapped[float] = mapped_column(Float, default=1.0)
+    aum: Mapped[float] = mapped_column(Float, default=0)
+    roi_period: Mapped[float] = mapped_column(Float, default=0)
+    win_rate: Mapped[float] = mapped_column(Float, default=0)
+    volatility: Mapped[float] = mapped_column(Float, default=0)
+    confidence: Mapped[float] = mapped_column(Float, default=0)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    vault: Mapped["StrategyVault"] = relationship(back_populates="snapshots")
+
+
+class CopyRelationship(Base, TimestampMixin):
+    __tablename__ = "copy_relationships"
+    __table_args__ = (UniqueConstraint("follower_user_id", "source_user_id", name="uq_copy_relationship"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    follower_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    source_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    source_type: Mapped[str] = mapped_column(String(30), default="TRADER")
+    status: Mapped[str] = mapped_column(String(30), default="ACTIVE")
+    allocation_pct: Mapped[float] = mapped_column(Float, default=0.1)
+    max_loss_pct: Mapped[float] = mapped_column(Float, default=0.1)
+    risk_level: Mapped[str] = mapped_column(String(20), default="MEDIUM")
+    auto_stop_threshold: Mapped[float] = mapped_column(Float, default=0.08)
+    max_follower_exposure: Mapped[float] = mapped_column(Float, default=5000)
+    trader_commission_bps: Mapped[int] = mapped_column(Integer, default=1500)
+    platform_fee_bps: Mapped[int] = mapped_column(Integer, default=200)
+    allowed_markets_json: Mapped[list[int]] = mapped_column(JSON, default=list)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    follower: Mapped["User"] = relationship(back_populates="copy_following", foreign_keys=[follower_user_id])
+    source: Mapped["User"] = relationship(back_populates="copy_followers", foreign_keys=[source_user_id])
+    rules: Mapped[list["CopyAllocationRule"]] = relationship(back_populates="relationship")
+    copied_trades: Mapped[list["CopiedTrade"]] = relationship(back_populates="relationship")
+    snapshots: Mapped[list["CopyPerformanceSnapshot"]] = relationship(back_populates="relationship")
+
+
+class CopyAllocationRule(Base, TimestampMixin):
+    __tablename__ = "copy_allocation_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    relationship_id: Mapped[int] = mapped_column(ForeignKey("copy_relationships.id"), index=True)
+    market_id: Mapped[int | None] = mapped_column(ForeignKey("markets.id"), nullable=True, index=True)
+    allocation_pct: Mapped[float] = mapped_column(Float, default=0.1)
+    per_market_cap: Mapped[float] = mapped_column(Float, default=1000)
+    position_limit: Mapped[float] = mapped_column(Float, default=5000)
+    slippage_bps: Mapped[int] = mapped_column(Integer, default=75)
+    stop_loss_pct: Mapped[float] = mapped_column(Float, default=0.08)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    market: Mapped["Market"] = relationship()
+    relationship: Mapped["CopyRelationship"] = relationship(back_populates="rules")
+
+
+class CopiedTrade(Base):
+    __tablename__ = "copied_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    relationship_id: Mapped[int] = mapped_column(ForeignKey("copy_relationships.id"), index=True)
+    source_trade_id: Mapped[int] = mapped_column(ForeignKey("trade_orders.id"), index=True)
+    follower_trade_id: Mapped[int | None] = mapped_column(ForeignKey("trade_orders.id"), nullable=True, index=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("markets.id"), index=True)
+    copied_allocation: Mapped[float] = mapped_column(Float, default=0)
+    copied_amount: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(30), default="EXECUTED")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_tx_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    follower_tx_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    relationship: Mapped["CopyRelationship"] = relationship(back_populates="copied_trades")
+
+
+class CopyPerformanceSnapshot(Base):
+    __tablename__ = "copy_performance_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    relationship_id: Mapped[int] = mapped_column(ForeignKey("copy_relationships.id"), index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    roi_7d: Mapped[float] = mapped_column(Float, default=0)
+    roi_30d: Mapped[float] = mapped_column(Float, default=0)
+    lifetime_accuracy: Mapped[float] = mapped_column(Float, default=0)
+    copied_followers: Mapped[int] = mapped_column(Integer, default=0)
+    assets_copied: Mapped[float] = mapped_column(Float, default=0)
+    drawdown_pct: Mapped[float] = mapped_column(Float, default=0)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    relationship: Mapped["CopyRelationship"] = relationship(back_populates="snapshots")
 
 
 class WalletBalance(Base):

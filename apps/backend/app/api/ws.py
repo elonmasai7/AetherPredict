@@ -18,3 +18,31 @@ async def tx_stream(websocket: WebSocket):
     await websocket.accept()
     async for payload in subscribe(settings.tx_websocket_channel):
         await websocket.send_json(payload)
+
+
+@router.websocket("/ws/vaults")
+async def vault_stream(websocket: WebSocket):
+    await websocket.accept()
+    async for payload in subscribe(settings.vault_websocket_channel):
+        await websocket.send_json(payload)
+
+
+@router.websocket("/ws/copy")
+async def copy_stream(websocket: WebSocket):
+    await websocket.accept()
+    async for payload in subscribe(settings.copy_websocket_channel):
+        await websocket.send_json(payload)
+
+
+@router.websocket("/ws/vaults")
+async def vault_stream(websocket: WebSocket):
+    await websocket.accept()
+    async for payload in subscribe(settings.vault_websocket_channel):
+        await websocket.send_json(payload)
+
+
+@router.websocket("/ws/copy")
+async def copy_stream(websocket: WebSocket):
+    await websocket.accept()
+    async for payload in subscribe(settings.copy_websocket_channel):
+        await websocket.send_json(payload)
