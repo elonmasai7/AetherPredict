@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
+import '../../core/theme.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -23,16 +25,35 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     final authenticated = ref.read(authSessionProvider).isAuthenticated;
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
-    context.go(authenticated ? '/dashboard' : '/login');
+    context.go(authenticated ? '/overview' : '/login');
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text(
-          'AetherPredict',
-          style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+    return Scaffold(
+      backgroundColor: AetherColors.bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: EnterprisePanel(
+              title: 'AetherPredict',
+              subtitle: 'Initializing institutional workspace...',
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  SizedBox(height: AetherSpacing.sm),
+                  LinearProgressIndicator(minHeight: 8),
+                  SizedBox(height: AetherSpacing.md),
+                  Text(
+                    'Loading market data, risk controls, and operational telemetry.',
+                    style: TextStyle(color: AetherColors.muted),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

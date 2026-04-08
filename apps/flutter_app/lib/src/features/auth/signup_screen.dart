@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
-import '../../widgets/glass_card.dart';
+import '../../core/theme.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -36,7 +37,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final displayName = _displayNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-    final confirmPassword = _confirmPasswordController.text;
+    final confirm = _confirmPasswordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       setState(() => _error = 'Email and password are required.');
@@ -46,7 +47,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       setState(() => _error = 'Use at least 8 characters for password.');
       return;
     }
-    if (password != confirmPassword) {
+    if (password != confirm) {
       setState(() => _error = 'Passwords do not match.');
       return;
     }
@@ -71,16 +72,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           refreshToken.isEmpty) {
         throw StateError('Authentication response did not include tokens.');
       }
+
       await ref.read(authSessionProvider.notifier).saveTokens(
             accessToken: accessToken,
             refreshToken: refreshToken,
             tokenType: tokenType,
           );
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully.')),
-      );
-      context.go('/dashboard');
+      context.go('/overview');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -94,90 +94,84 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authSessionProvider);
+
     ref.read(authSessionProvider.notifier).restore();
+
     if (auth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
-          context.go('/dashboard');
+          context.go('/overview');
         }
       });
     }
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF07111F), Color(0xFF13325B), Color(0xFF07111F)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+      backgroundColor: AetherColors.bg,
+      body: SafeArea(
         child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: GlassCard(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Create your AetherPredict account',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Sign up to start tracking markets, vaults, and AI signals.',
-                    style:
-                        TextStyle(color: Colors.white.withValues(alpha: 0.72)),
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: _displayNameController,
-                    decoration: const InputDecoration(
-                        labelText: 'Display name (optional)'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _confirmPasswordController,
-                    obscureText: true,
-                    decoration:
-                        const InputDecoration(labelText: 'Confirm password'),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!,
-                        style: const TextStyle(color: Colors.redAccent)),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AetherSpacing.lg),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 540),
+              child: EnterprisePanel(
+                title: 'Create Account',
+                subtitle: 'Provision access for the institutional trading workspace.',
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _displayNameController,
+                      decoration:
+                          const InputDecoration(labelText: 'Display Name (Optional)'),
+                    ),
+                    const SizedBox(height: AetherSpacing.sm),
+                    TextField(
+                      controller: _emailController,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: AetherSpacing.sm),
+                    TextField(
+                      controller: _passwordController,
+                      decoration: const InputDecoration(labelText: 'Password'),
+                      obscureText: true,
+                    ),
+                    const SizedBox(height: AetherSpacing.sm),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      decoration: const InputDecoration(labelText: 'Confirm Password'),
+                      obscureText: true,
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: AetherSpacing.sm),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: AetherColors.critical),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AetherSpacing.md),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _submitting ? null : _submit,
+                        child: Text(
+                          _submitting ? 'Creating account...' : 'Create Account',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AetherSpacing.sm),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: _submitting ? null : () => context.go('/login'),
+                        child: const Text('Back to Sign In'),
+                      ),
+                    ),
                   ],
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _submitting ? null : _submit,
-                      child:
-                          Text(_submitting ? 'Creating account...' : 'Sign up'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed:
-                          _submitting ? null : () => context.go('/login'),
-                      child: const Text('Back to sign in'),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

@@ -1,59 +1,321 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
-import '../../widgets/glass_card.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 
-class ReportsScreen extends StatelessWidget {
+class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
+
+  @override
+  State<ReportsScreen> createState() => _ReportsScreenState();
+}
+
+class _ReportsScreenState extends State<ReportsScreen> {
+  final _startController = TextEditingController(text: '2026-04-01');
+  final _endController = TextEditingController(text: '2026-04-08');
+  final _accountController = TextEditingController(text: 'Primary Desk');
+
+  String _reportType = 'Performance Statement';
+  String _format = 'CSV';
+  ActionButtonState _generateState = ActionButtonState.idle;
+  String? _statusMessage;
+
+  @override
+  void dispose() {
+    _startController.dispose();
+    _endController.dispose();
+    _accountController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Reports',
+      subtitle: 'Regulatory, audit, and desk reporting workflows with generation tracking.',
       child: ListView(
         children: [
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: const [
-              _FilterField(label: 'Start Date'),
-              _FilterField(label: 'End Date'),
-              _FilterField(label: 'Account'),
-              _FilterField(label: 'Report Type'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Export Workflows', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+          EnterprisePanel(
+            title: 'Generate Report',
+            subtitle: 'Configure scope, format, and desk account.',
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 920;
+                return Column(
                   children: [
-                    FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.download), label: const Text('Export CSV')),
-                    OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.picture_as_pdf_outlined), label: const Text('Generate PDF Statement')),
-                    OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.history), label: const Text('Transaction History')),
-                    OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.analytics_outlined), label: const Text('Performance Report')),
+                    if (compact) ...[
+                      TextField(
+                        controller: _startController,
+                        decoration: const InputDecoration(
+                          labelText: 'Start Date (YYYY-MM-DD)',
+                        ),
+                      ),
+                      const SizedBox(height: AetherSpacing.sm),
+                      TextField(
+                        controller: _endController,
+                        decoration: const InputDecoration(
+                          labelText: 'End Date (YYYY-MM-DD)',
+                        ),
+                      ),
+                    ] else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _startController,
+                              decoration: const InputDecoration(
+                                labelText: 'Start Date (YYYY-MM-DD)',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AetherSpacing.sm),
+                          Expanded(
+                            child: TextField(
+                              controller: _endController,
+                              decoration: const InputDecoration(
+                                labelText: 'End Date (YYYY-MM-DD)',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: AetherSpacing.sm),
+                    if (compact) ...[
+                      TextField(
+                        controller: _accountController,
+                        decoration: const InputDecoration(
+                          labelText: 'Account / Desk',
+                        ),
+                      ),
+                      const SizedBox(height: AetherSpacing.sm),
+                      DropdownButtonFormField<String>(
+                        value: _reportType,
+                        decoration: const InputDecoration(labelText: 'Report Type'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'Performance Statement',
+                            child: Text('Performance Statement'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Transaction History',
+                            child: Text('Transaction History'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Risk Summary',
+                            child: Text('Risk Summary'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => _reportType = value);
+                        },
+                      ),
+                      const SizedBox(height: AetherSpacing.sm),
+                      DropdownButtonFormField<String>(
+                        value: _format,
+                        decoration: const InputDecoration(labelText: 'Format'),
+                        items: const [
+                          DropdownMenuItem(value: 'CSV', child: Text('CSV')),
+                          DropdownMenuItem(value: 'PDF', child: Text('PDF')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => _format = value);
+                        },
+                      ),
+                    ] else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _accountController,
+                              decoration: const InputDecoration(
+                                labelText: 'Account / Desk',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AetherSpacing.sm),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _reportType,
+                              decoration: const InputDecoration(
+                                labelText: 'Report Type',
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'Performance Statement',
+                                  child: Text('Performance Statement'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Transaction History',
+                                  child: Text('Transaction History'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Risk Summary',
+                                  child: Text('Risk Summary'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _reportType = value);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: AetherSpacing.sm),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _format,
+                              decoration: const InputDecoration(labelText: 'Format'),
+                              items: const [
+                                DropdownMenuItem(value: 'CSV', child: Text('CSV')),
+                                DropdownMenuItem(value: 'PDF', child: Text('PDF')),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _format = value);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (_statusMessage != null) ...[
+                      const SizedBox(height: AetherSpacing.sm),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _statusMessage!,
+                          style: TextStyle(
+                            color: _generateState == ActionButtonState.failure
+                                ? AetherColors.critical
+                                : _generateState == ActionButtonState.success
+                                    ? AetherColors.success
+                                    : AetherColors.muted,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AetherSpacing.md),
+                    if (compact) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: ActionStateButton(
+                          label: 'Generate Report',
+                          state: _generateState,
+                          retryLabel: 'Retry Generation',
+                          onPressed: _generate,
+                        ),
+                      ),
+                      const SizedBox(height: AetherSpacing.sm),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _generateState == ActionButtonState.loading
+                              ? null
+                              : () => setState(() {
+                                    _statusMessage =
+                                        'Template saved for recurring schedule.';
+                                  }),
+                          icon: const Icon(Icons.schedule),
+                          label: const Text('Save Schedule'),
+                        ),
+                      ),
+                    ] else
+                      Row(
+                        children: [
+                          ActionStateButton(
+                            label: 'Generate Report',
+                            state: _generateState,
+                            retryLabel: 'Retry Generation',
+                            onPressed: _generate,
+                          ),
+                          const SizedBox(width: AetherSpacing.sm),
+                          OutlinedButton.icon(
+                            onPressed: _generateState == ActionButtonState.loading
+                                ? null
+                                : () => setState(() {
+                                      _statusMessage =
+                                          'Template saved for recurring schedule.';
+                                    }),
+                            icon: const Icon(Icons.schedule),
+                            label: const Text('Save Schedule'),
+                          ),
+                        ],
+                      ),
                   ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: AetherSpacing.lg),
+          EnterpriseDataTable<_ReportJob>(
+            title: 'Report Job Queue',
+            subtitle: 'Generation, delivery, and audit state for each report run.',
+            rows: _jobs(),
+            rowId: (row) => row.id,
+            searchHint: 'Search report job id or account',
+            filters: [
+              EnterpriseTableFilter(
+                label: 'Completed',
+                predicate: (row) => row.status == 'Completed',
+              ),
+              EnterpriseTableFilter(
+                label: 'Failed',
+                predicate: (row) => row.status == 'Failed',
+              ),
+            ],
+            columns: [
+              EnterpriseTableColumn(
+                label: 'Job ID',
+                width: 120,
+                cell: (row) => row.id,
+                sortValue: (row) => row.id,
+              ),
+              EnterpriseTableColumn(
+                label: 'Generated At',
+                width: 180,
+                cell: (row) => row.generatedAt,
+                sortValue: (row) => row.generatedAt,
+              ),
+              EnterpriseTableColumn(
+                label: 'Type',
+                width: 180,
+                cell: (row) => row.type,
+                sortValue: (row) => row.type,
+              ),
+              EnterpriseTableColumn(
+                label: 'Format',
+                width: 80,
+                cell: (row) => row.format,
+                sortValue: (row) => row.format,
+              ),
+              EnterpriseTableColumn(
+                label: 'Status',
+                width: 100,
+                cell: (row) => row.status,
+                sortValue: (row) => row.status,
+              ),
+              EnterpriseTableColumn(
+                label: 'Account',
+                width: 140,
+                cell: (row) => row.account,
+                sortValue: (row) => row.account,
+              ),
+            ],
+            expandedBuilder: (row) => Row(
+              children: [
+                StatusBadge(
+                  label: row.status,
+                  color: row.status == 'Completed'
+                      ? AetherColors.success
+                      : row.status == 'Failed'
+                          ? AetherColors.critical
+                          : AetherColors.warning,
                 ),
-                const SizedBox(height: 20),
-                const Text('Recent Report Jobs', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 10),
-                DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Generated')),
-                    DataColumn(label: Text('Type')),
-                    DataColumn(label: Text('Format')),
-                    DataColumn(label: Text('Status')),
-                  ],
-                  rows: const [
-                    DataRow(cells: [DataCell(Text('2026-04-05 15:18')), DataCell(Text('Performance Statement')), DataCell(Text('PDF')), DataCell(Text('Completed'))]),
-                    DataRow(cells: [DataCell(Text('2026-04-05 14:02')), DataCell(Text('Transaction History')), DataCell(Text('CSV')), DataCell(Text('Completed'))]),
-                    DataRow(cells: [DataCell(Text('2026-04-05 09:41')), DataCell(Text('Risk Summary')), DataCell(Text('PDF')), DataCell(Text('Completed'))]),
-                  ],
+                const SizedBox(width: AetherSpacing.sm),
+                Text(
+                  'Delivered to ${row.destination}',
+                  style: const TextStyle(color: AetherColors.muted),
                 ),
               ],
             ),
@@ -62,17 +324,99 @@ class ReportsScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _generate() async {
+    if (_generateState == ActionButtonState.loading) return;
+
+    if (_generateState == ActionButtonState.failure) {
+      setState(() {
+        _generateState = ActionButtonState.idle;
+        _statusMessage = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _generateState = ActionButtonState.loading;
+      _statusMessage = 'Submitting report job...';
+    });
+
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final badRange = _startController.text.trim().compareTo(_endController.text.trim()) > 0;
+    if (badRange) {
+      setState(() {
+        _generateState = ActionButtonState.failure;
+        _statusMessage = 'Invalid date range. Start date must be before end date.';
+      });
+      return;
+    }
+
+    setState(() {
+      _generateState = ActionButtonState.success;
+      _statusMessage = 'Report generated and queued for delivery.';
+    });
+  }
+
+  List<_ReportJob> _jobs() {
+    return const [
+      _ReportJob(
+        id: 'RP-9412',
+        generatedAt: '2026-04-08T14:10:00Z',
+        type: 'Performance Statement',
+        format: 'PDF',
+        status: 'Completed',
+        account: 'Primary Desk',
+        destination: 'secure-vault://reports/2026-04-08',
+      ),
+      _ReportJob(
+        id: 'RP-9408',
+        generatedAt: '2026-04-08T13:42:00Z',
+        type: 'Transaction History',
+        format: 'CSV',
+        status: 'Completed',
+        account: 'Primary Desk',
+        destination: 'secure-vault://reports/2026-04-08',
+      ),
+      _ReportJob(
+        id: 'RP-9391',
+        generatedAt: '2026-04-08T12:22:00Z',
+        type: 'Risk Summary',
+        format: 'PDF',
+        status: 'Pending',
+        account: 'Risk Desk',
+        destination: 'secure-vault://reports/risk',
+      ),
+      _ReportJob(
+        id: 'RP-9380',
+        generatedAt: '2026-04-08T10:01:00Z',
+        type: 'Transaction History',
+        format: 'CSV',
+        status: 'Failed',
+        account: 'Treasury',
+        destination: 'secure-vault://reports/treasury',
+      ),
+    ];
+  }
 }
 
-class _FilterField extends StatelessWidget {
-  const _FilterField({required this.label});
-  final String label;
+class _ReportJob {
+  const _ReportJob({
+    required this.id,
+    required this.generatedAt,
+    required this.type,
+    required this.format,
+    required this.status,
+    required this.account,
+    required this.destination,
+  });
 
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      child: TextField(decoration: InputDecoration(labelText: label)),
-    );
-  }
+  final String id;
+  final String generatedAt;
+  final String type;
+  final String format;
+  final String status;
+  final String account;
+  final String destination;
 }

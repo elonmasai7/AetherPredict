@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
-import '../../widgets/glass_card.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 
 class OperationsConsoleScreen extends StatelessWidget {
   const OperationsConsoleScreen({super.key});
@@ -10,83 +10,491 @@ class OperationsConsoleScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Operations Console',
-      child: ListView(
-        children: [
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: const [
-              _OpsMetric(title: 'Protocol Health', value: '99.98%', detail: 'SLA over last 24h'),
-              _OpsMetric(title: 'Dispute Queue', value: '4', detail: '2 high priority'),
-              _OpsMetric(title: 'Flagged Wallets', value: '13', detail: 'Monitoring active'),
-              _OpsMetric(title: 'Oracle Drift', value: '0.12%', detail: 'Within threshold'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Operational Logs', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Time')),
-                    DataColumn(label: Text('Component')),
-                    DataColumn(label: Text('Event')),
-                    DataColumn(label: Text('Severity')),
-                  ],
-                  rows: const [
-                    DataRow(cells: [DataCell(Text('15:29:14')), DataCell(Text('Oracle Mesh')), DataCell(Text('Cross-feed sync complete')), DataCell(Text('Info'))]),
-                    DataRow(cells: [DataCell(Text('15:12:52')), DataCell(Text('Liquidity Sentinel')), DataCell(Text('Depth reduced on BTC market')), DataCell(Text('Warning'))]),
-                    DataRow(cells: [DataCell(Text('14:58:31')), DataCell(Text('Dispute Engine')), DataCell(Text('Escalated case #2981')), DataCell(Text('Critical'))]),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('System Incidents', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                SizedBox(height: 12),
-                Text('No unresolved incidents in the past 6 hours.'),
-                SizedBox(height: 8),
-                Text('Last incident: API latency spike at 12:14 UTC, resolved in 4m.'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OpsMetric extends StatelessWidget {
-  const _OpsMetric({required this.title, required this.value, required this.detail});
-  final String title;
-  final String value;
-  final String detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 260,
-      child: GlassCard(
+      title: 'Operations',
+      subtitle: 'Institutional operations center for reliability, audits, and treasury governance.',
+      child: DefaultTabController(
+        length: 7,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(color: AetherColors.muted)),
-            const SizedBox(height: 8),
-            Text(value, style: numericStyle(context, size: 28)),
-            const SizedBox(height: 6),
-            Text(detail, style: const TextStyle(color: AetherColors.muted)),
+            EnterprisePanel(
+              child: Row(
+                children: const [
+                  Expanded(
+                    child: StatusBadge(
+                      label: 'System Status: Operational',
+                      color: AetherColors.success,
+                    ),
+                  ),
+                  SizedBox(width: AetherSpacing.sm),
+                  Expanded(
+                    child: StatusBadge(
+                      label: 'Open Incidents: 1',
+                      color: AetherColors.warning,
+                    ),
+                  ),
+                  SizedBox(width: AetherSpacing.sm),
+                  Expanded(
+                    child: StatusBadge(
+                      label: 'Critical Alerts: 0',
+                      color: AetherColors.success,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AetherSpacing.md),
+            const TabBar(
+              isScrollable: true,
+              tabs: [
+                Tab(text: 'System Status'),
+                Tab(text: 'Incident Logs'),
+                Tab(text: 'AI Model Health'),
+                Tab(text: 'Trade Audit Trail'),
+                Tab(text: 'Dispute Queue'),
+                Tab(text: 'Wallet Activity'),
+                Tab(text: 'Protocol Treasury'),
+              ],
+            ),
+            const SizedBox(height: AetherSpacing.md),
+            const Expanded(
+              child: TabBarView(
+                children: [
+                  _SystemStatusTab(),
+                  _IncidentLogTab(),
+                  _ModelHealthTab(),
+                  _TradeAuditTab(),
+                  _DisputeQueueTab(),
+                  _WalletActivityTab(),
+                  _TreasuryTab(),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+class _SystemStatusTab extends StatelessWidget {
+  const _SystemStatusTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return EnterpriseDataTable<_SystemStatusRow>(
+      title: 'System Status Grid',
+      subtitle: 'Live service uptime, latency, and current health state.',
+      rows: const [
+        _SystemStatusRow('API Gateway', '99.99%', '142 ms', 'Healthy'),
+        _SystemStatusRow('Oracle Mesh', '99.97%', '186 ms', 'Healthy'),
+        _SystemStatusRow('Settlement Engine', '99.92%', '302 ms', 'Watch'),
+        _SystemStatusRow('WebSocket Streams', '99.96%', '88 ms', 'Healthy'),
+        _SystemStatusRow('Risk Engine', '99.94%', '214 ms', 'Healthy'),
+      ],
+      rowId: (row) => row.service,
+      searchHint: 'Search service',
+      filters: [
+        EnterpriseTableFilter(
+          label: 'Watch',
+          predicate: (row) => row.status == 'Watch',
+        ),
+      ],
+      columns: [
+        EnterpriseTableColumn(
+          label: 'Service',
+          width: 220,
+          cell: (row) => row.service,
+          sortValue: (row) => row.service,
+        ),
+        EnterpriseTableColumn(
+          label: 'Uptime',
+          width: 110,
+          numeric: true,
+          cell: (row) => row.uptime,
+          sortValue: (row) => row.uptime,
+        ),
+        EnterpriseTableColumn(
+          label: 'Latency',
+          width: 110,
+          numeric: true,
+          cell: (row) => row.latency,
+          sortValue: (row) => row.latency,
+        ),
+        EnterpriseTableColumn(
+          label: 'Status',
+          width: 100,
+          cell: (row) => row.status,
+          sortValue: (row) => row.status,
+        ),
+      ],
+    );
+  }
+}
+
+class _IncidentLogTab extends StatelessWidget {
+  const _IncidentLogTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return EnterpriseDataTable<_IncidentRow>(
+      title: 'Incident Logs',
+      subtitle: 'Incident lifecycle tracking with SLA ownership.',
+      rows: const [
+        _IncidentRow('INC-8821', '2026-04-08T11:10:00Z', 'Oracle drift alert', 'Open', 'Ops'),
+        _IncidentRow('INC-8819', '2026-04-08T09:45:00Z', 'Settlement delay', 'Resolved', 'Protocol'),
+        _IncidentRow('INC-8812', '2026-04-07T21:20:00Z', 'Risk engine retry spike', 'Resolved', 'Risk'),
+      ],
+      rowId: (row) => row.id,
+      searchHint: 'Search incident id or summary',
+      filters: [
+        EnterpriseTableFilter(
+          label: 'Open',
+          predicate: (row) => row.status == 'Open',
+        ),
+      ],
+      columns: [
+        EnterpriseTableColumn(
+          label: 'Incident ID',
+          width: 120,
+          cell: (row) => row.id,
+          sortValue: (row) => row.id,
+        ),
+        EnterpriseTableColumn(
+          label: 'Opened At',
+          width: 180,
+          cell: (row) => row.openedAt,
+          sortValue: (row) => row.openedAt,
+        ),
+        EnterpriseTableColumn(
+          label: 'Summary',
+          width: 290,
+          cell: (row) => row.summary,
+          sortValue: (row) => row.summary,
+        ),
+        EnterpriseTableColumn(
+          label: 'Status',
+          width: 100,
+          cell: (row) => row.status,
+          sortValue: (row) => row.status,
+        ),
+        EnterpriseTableColumn(
+          label: 'Owner',
+          width: 100,
+          cell: (row) => row.owner,
+          sortValue: (row) => row.owner,
+        ),
+      ],
+    );
+  }
+}
+
+class _ModelHealthTab extends StatelessWidget {
+  const _ModelHealthTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return EnterpriseDataTable<_ModelHealthRow>(
+      title: 'AI Model Health',
+      subtitle: 'Inference quality, drift, and pipeline reliability telemetry.',
+      rows: const [
+        _ModelHealthRow('prediction-core-v4', '0.89', '0.04', 'Healthy'),
+        _ModelHealthRow('sentiment-aggregator-v2', '0.82', '0.07', 'Watch'),
+        _ModelHealthRow('risk-scoring-v3', '0.91', '0.03', 'Healthy'),
+      ],
+      rowId: (row) => row.model,
+      searchHint: 'Search model id',
+      filters: [
+        EnterpriseTableFilter(
+          label: 'Watch',
+          predicate: (row) => row.status == 'Watch',
+        ),
+      ],
+      columns: [
+        EnterpriseTableColumn(
+          label: 'Model',
+          width: 230,
+          cell: (row) => row.model,
+          sortValue: (row) => row.model,
+        ),
+        EnterpriseTableColumn(
+          label: 'Accuracy',
+          width: 100,
+          numeric: true,
+          cell: (row) => row.accuracy,
+          sortValue: (row) => row.accuracy,
+        ),
+        EnterpriseTableColumn(
+          label: 'Drift',
+          width: 100,
+          numeric: true,
+          cell: (row) => row.drift,
+          sortValue: (row) => row.drift,
+        ),
+        EnterpriseTableColumn(
+          label: 'Status',
+          width: 100,
+          cell: (row) => row.status,
+          sortValue: (row) => row.status,
+        ),
+      ],
+    );
+  }
+}
+
+class _TradeAuditTab extends StatelessWidget {
+  const _TradeAuditTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return EnterpriseDataTable<_TradeAuditRow>(
+      title: 'Trade Audit Trail',
+      subtitle: 'Execution and settlement chain-of-custody records.',
+      rows: const [
+        _TradeAuditRow('TR-7129', 'BTC > 120k', 'Settled', '0x91ac...44f2'),
+        _TradeAuditRow('TR-7126', 'ETH ETF volume', 'Settled', '0x84ba...91cc'),
+        _TradeAuditRow('TR-7111', 'SOL APR', 'Pending', '0x12fa...21ac'),
+      ],
+      rowId: (row) => row.id,
+      searchHint: 'Search trade id or market',
+      filters: [
+        EnterpriseTableFilter(
+          label: 'Pending',
+          predicate: (row) => row.status == 'Pending',
+        ),
+      ],
+      columns: [
+        EnterpriseTableColumn(
+          label: 'Trade ID',
+          width: 100,
+          cell: (row) => row.id,
+          sortValue: (row) => row.id,
+        ),
+        EnterpriseTableColumn(
+          label: 'Market',
+          width: 280,
+          cell: (row) => row.market,
+          sortValue: (row) => row.market,
+        ),
+        EnterpriseTableColumn(
+          label: 'Status',
+          width: 100,
+          cell: (row) => row.status,
+          sortValue: (row) => row.status,
+        ),
+        EnterpriseTableColumn(
+          label: 'Tx Hash',
+          width: 180,
+          cell: (row) => row.hash,
+          sortValue: (row) => row.hash,
+        ),
+      ],
+    );
+  }
+}
+
+class _DisputeQueueTab extends StatelessWidget {
+  const _DisputeQueueTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return EnterpriseDataTable<_DisputeRow>(
+      title: 'Dispute Queue',
+      subtitle: 'Open dispute investigations and evidence completeness.',
+      rows: const [
+        _DisputeRow('DSP-330', 'BTC > 120k', 'Evidence Review', 'High'),
+        _DisputeRow('DSP-321', 'HashKey TVL', 'Juror Voting', 'Medium'),
+        _DisputeRow('DSP-317', 'ETH ETF volume', 'Resolved', 'Low'),
+      ],
+      rowId: (row) => row.id,
+      searchHint: 'Search dispute id or market',
+      filters: [
+        EnterpriseTableFilter(
+          label: 'High Priority',
+          predicate: (row) => row.priority == 'High',
+        ),
+      ],
+      columns: [
+        EnterpriseTableColumn(
+          label: 'Dispute ID',
+          width: 120,
+          cell: (row) => row.id,
+          sortValue: (row) => row.id,
+        ),
+        EnterpriseTableColumn(
+          label: 'Market',
+          width: 260,
+          cell: (row) => row.market,
+          sortValue: (row) => row.market,
+        ),
+        EnterpriseTableColumn(
+          label: 'Stage',
+          width: 140,
+          cell: (row) => row.stage,
+          sortValue: (row) => row.stage,
+        ),
+        EnterpriseTableColumn(
+          label: 'Priority',
+          width: 100,
+          cell: (row) => row.priority,
+          sortValue: (row) => row.priority,
+        ),
+      ],
+    );
+  }
+}
+
+class _WalletActivityTab extends StatelessWidget {
+  const _WalletActivityTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return EnterpriseDataTable<_WalletActivityRow>(
+      title: 'Wallet Activity',
+      subtitle: 'Address-level transaction telemetry and risk posture flags.',
+      rows: const [
+        _WalletActivityRow('0x1f...a11d', 'Deposit', '$200,000', 'Normal'),
+        _WalletActivityRow('0x8a...02bc', 'Withdrawal', '$48,000', 'Review'),
+        _WalletActivityRow('0xc1...ef54', 'Trade Settlement', '$120,000', 'Normal'),
+      ],
+      rowId: (row) => row.address,
+      searchHint: 'Search wallet address',
+      filters: [
+        EnterpriseTableFilter(
+          label: 'Review Required',
+          predicate: (row) => row.flag == 'Review',
+        ),
+      ],
+      columns: [
+        EnterpriseTableColumn(
+          label: 'Address',
+          width: 200,
+          cell: (row) => row.address,
+          sortValue: (row) => row.address,
+        ),
+        EnterpriseTableColumn(
+          label: 'Action',
+          width: 140,
+          cell: (row) => row.action,
+          sortValue: (row) => row.action,
+        ),
+        EnterpriseTableColumn(
+          label: 'Amount',
+          width: 120,
+          numeric: true,
+          cell: (row) => row.amount,
+          sortValue: (row) => row.amount,
+        ),
+        EnterpriseTableColumn(
+          label: 'Flag',
+          width: 100,
+          cell: (row) => row.flag,
+          sortValue: (row) => row.flag,
+        ),
+      ],
+    );
+  }
+}
+
+class _TreasuryTab extends StatelessWidget {
+  const _TreasuryTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return EnterpriseDataTable<_TreasuryRow>(
+      title: 'Protocol Treasury',
+      subtitle: 'Treasury allocations, liabilities, and liquidity runway.',
+      rows: const [
+        _TreasuryRow('USDC Reserves', '$4,200,000', 'Core Liquidity'),
+        _TreasuryRow('Insurance Buffer', '$1,150,000', 'Risk Offset'),
+        _TreasuryRow('Market-Making Inventory', '$2,480,000', 'Execution Support'),
+        _TreasuryRow('Protocol Fees (30D)', '$380,000', 'Revenue'),
+      ],
+      rowId: (row) => row.bucket,
+      searchHint: 'Search treasury bucket',
+      columns: [
+        EnterpriseTableColumn(
+          label: 'Bucket',
+          width: 250,
+          cell: (row) => row.bucket,
+          sortValue: (row) => row.bucket,
+        ),
+        EnterpriseTableColumn(
+          label: 'Value',
+          width: 160,
+          numeric: true,
+          cell: (row) => row.value,
+          sortValue: (row) => row.value,
+        ),
+        EnterpriseTableColumn(
+          label: 'Purpose',
+          width: 220,
+          cell: (row) => row.purpose,
+          sortValue: (row) => row.purpose,
+        ),
+      ],
+    );
+  }
+}
+
+class _SystemStatusRow {
+  const _SystemStatusRow(this.service, this.uptime, this.latency, this.status);
+
+  final String service;
+  final String uptime;
+  final String latency;
+  final String status;
+}
+
+class _IncidentRow {
+  const _IncidentRow(this.id, this.openedAt, this.summary, this.status, this.owner);
+
+  final String id;
+  final String openedAt;
+  final String summary;
+  final String status;
+  final String owner;
+}
+
+class _ModelHealthRow {
+  const _ModelHealthRow(this.model, this.accuracy, this.drift, this.status);
+
+  final String model;
+  final String accuracy;
+  final String drift;
+  final String status;
+}
+
+class _TradeAuditRow {
+  const _TradeAuditRow(this.id, this.market, this.status, this.hash);
+
+  final String id;
+  final String market;
+  final String status;
+  final String hash;
+}
+
+class _DisputeRow {
+  const _DisputeRow(this.id, this.market, this.stage, this.priority);
+
+  final String id;
+  final String market;
+  final String stage;
+  final String priority;
+}
+
+class _WalletActivityRow {
+  const _WalletActivityRow(this.address, this.action, this.amount, this.flag);
+
+  final String address;
+  final String action;
+  final String amount;
+  final String flag;
+}
+
+class _TreasuryRow {
+  const _TreasuryRow(this.bucket, this.value, this.purpose);
+
+  final String bucket;
+  final String value;
+  final String purpose;
 }

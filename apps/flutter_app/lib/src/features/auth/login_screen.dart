@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../core/wallet_service.dart';
-import '../../widgets/glass_card.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -32,7 +33,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     final email = _emailController.text.trim();
     final password = _passwordController.text;
-
     if (email.isEmpty || password.isEmpty) {
       setState(() => _error = 'Email and password are required.');
       return;
@@ -44,9 +44,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      final authPayload = await ref
-          .read(apiClientProvider)
-          .login(email: email, password: password);
+      final authPayload =
+          await ref.read(apiClientProvider).login(email: email, password: password);
       final accessToken = authPayload['access_token']?.toString();
       final refreshToken = authPayload['refresh_token']?.toString();
       final tokenType = authPayload['token_type']?.toString() ?? 'bearer';
@@ -56,13 +55,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           refreshToken.isEmpty) {
         throw StateError('Authentication response did not include tokens.');
       }
+
       await ref.read(authSessionProvider.notifier).saveTokens(
             accessToken: accessToken,
             refreshToken: refreshToken,
             tokenType: tokenType,
           );
+
       if (!mounted) return;
-      context.go('/dashboard');
+      context.go('/overview');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  Future<void> _walletConnect() async {
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    try {
+      await ref.read(walletSessionProvider.notifier).connect(WalletType.walletConnect);
+      if (!mounted) return;
+      context.go('/overview');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -75,98 +97,129 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final wallet = ref.watch(walletSessionProvider);
     final auth = ref.watch(authSessionProvider);
+    final wallet = ref.watch(walletSessionProvider);
+
     ref.read(authSessionProvider.notifier).restore();
+
     if (auth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
-          context.go('/dashboard');
+          context.go('/overview');
         }
       });
     }
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF07111F), Color(0xFF13325B), Color(0xFF07111F)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+
+    final infoPanel = EnterprisePanel(
+      title: 'AetherPredict',
+      subtitle: 'Institutional Financial Intelligence Platform',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text(
+            'Unified markets, risk, vault, and operations workflows for professional trading teams.',
           ),
-        ),
+          SizedBox(height: AetherSpacing.md),
+          Text('• Workflow-native navigation and operational data density'),
+          SizedBox(height: 6),
+          Text('• Structured tables, audit trails, and report pipelines'),
+          SizedBox(height: 6),
+          Text('• Wallet-integrated execution and settlement tracking'),
+        ],
+      ),
+    );
+
+    final formPanel = EnterprisePanel(
+      title: 'Sign In',
+      subtitle: 'Access your institutional workspace.',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _emailController,
+            decoration: const InputDecoration(labelText: 'Email'),
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: AetherSpacing.sm),
+          TextField(
+            controller: _passwordController,
+            decoration: const InputDecoration(labelText: 'Password'),
+            obscureText: true,
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: AetherSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _error!,
+                style: const TextStyle(color: AetherColors.critical),
+              ),
+            ),
+          ],
+          const SizedBox(height: AetherSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _submitting ? null : _submit,
+              child: Text(_submitting ? 'Signing in...' : 'Sign In'),
+            ),
+          ),
+          const SizedBox(height: AetherSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _submitting ? null : _walletConnect,
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: Text(
+                wallet.connected
+                    ? 'Wallet Connected'
+                    : 'Connect Wallet and Continue',
+              ),
+            ),
+          ),
+          const SizedBox(height: AetherSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: _submitting ? null : () => context.go('/signup'),
+              child: const Text('Create Account'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Scaffold(
+      backgroundColor: AetherColors.bg,
+      body: SafeArea(
         child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
-            child: GlassCard(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Institutional prediction intelligence',
-                      style:
-                          TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Trade on-chain probabilities with AI-driven confidence, dispute intelligence, and autonomous liquidity support.',
-                    style:
-                        TextStyle(color: Colors.white.withValues(alpha: 0.72)),
-                  ),
-                  const SizedBox(height: 24),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!,
-                        style: const TextStyle(color: Colors.redAccent)),
-                  ],
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _submitting ? null : _submit,
-                      child: Text(_submitting ? 'Signing in...' : 'Sign in'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed:
-                          _submitting ? null : () => context.go('/signup'),
-                      child: const Text('Create account'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: _submitting
-                        ? null
-                        : () async {
-                            await ref
-                                .read(walletSessionProvider.notifier)
-                                .connect(WalletType.walletConnect);
-                            if (context.mounted) {
-                              context.go('/dashboard');
-                            }
-                          },
-                    child: Text(wallet.connected
-                        ? 'Wallet Connected'
-                        : 'Connect Wallet'),
-                  ),
-                  if (wallet.error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(wallet.error!,
-                        style: const TextStyle(color: Colors.redAccent)),
-                  ],
-                ],
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AetherSpacing.lg),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 980),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 860;
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        infoPanel,
+                        const SizedBox(height: AetherSpacing.lg),
+                        formPanel,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: infoPanel),
+                      const SizedBox(width: AetherSpacing.lg),
+                      SizedBox(width: 420, child: formPanel),
+                    ],
+                  );
+                },
               ),
             ),
           ),

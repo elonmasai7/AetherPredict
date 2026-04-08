@@ -5,40 +5,31 @@ import 'package:go_router/go_router.dart';
 import '../core/providers.dart';
 import '../core/theme.dart';
 import '../core/wallet_service.dart';
+import 'enterprise/enterprise_components.dart';
 import 'live_ticker_bar.dart';
 
 class _NavItem {
-  const _NavItem(this.label, this.path, this.icon);
+  const _NavItem(this.label, this.path, this.icon, {this.mobile = false});
+
   final String label;
   final String path;
   final IconData icon;
+  final bool mobile;
 }
 
-const _desktopItems = [
-  _NavItem('Dashboard', '/dashboard', Icons.dashboard_outlined),
-  _NavItem('Markets', '/markets', Icons.candlestick_chart),
-  _NavItem('Portfolio', '/portfolio', Icons.account_balance_wallet_outlined),
-  _NavItem('AI Signals', '/copilot', Icons.auto_awesome_outlined),
-  _NavItem('Research Workspace', '/research', Icons.edit_note_outlined),
-  _NavItem('Leaderboard', '/leaderboard', Icons.emoji_events_outlined),
-  _NavItem('Vaults', '/vaults', Icons.account_balance_outlined),
-  _NavItem('Copy Trading', '/copy-trading', Icons.content_copy_outlined),
-  _NavItem('Notifications', '/notifications', Icons.notifications_none),
-  _NavItem('Reports', '/reports', Icons.assessment_outlined),
-  _NavItem('Operations Console', '/operations',
-      Icons.precision_manufacturing_outlined),
-  _NavItem('Status Center', '/status', Icons.health_and_safety_outlined),
+const _navItems = [
+  _NavItem('Overview', '/overview', Icons.grid_view_rounded, mobile: true),
+  _NavItem('Markets', '/markets', Icons.candlestick_chart_rounded, mobile: true),
+  _NavItem('Trading', '/trading', Icons.swap_horiz_rounded, mobile: true),
+  _NavItem('Vaults', '/vaults', Icons.account_balance_rounded),
+  _NavItem('Copy Trading', '/copy-trading', Icons.share_rounded),
+  _NavItem('Portfolio', '/portfolio', Icons.account_balance_wallet_rounded, mobile: true),
+  _NavItem('Risk', '/risk', Icons.shield_outlined),
+  _NavItem('Research', '/research', Icons.manage_search_rounded),
+  _NavItem('Alerts', '/alerts', Icons.notifications_active_outlined, mobile: true),
+  _NavItem('Reports', '/reports', Icons.receipt_long_rounded),
+  _NavItem('Operations', '/operations', Icons.precision_manufacturing_rounded),
   _NavItem('Settings', '/settings', Icons.settings_outlined),
-];
-
-const _mobileItems = [
-  _NavItem('Home', '/dashboard', Icons.home_outlined),
-  _NavItem('Markets', '/markets', Icons.candlestick_chart),
-  _NavItem('Portfolio', '/portfolio', Icons.account_balance_wallet_outlined),
-  _NavItem('Vaults', '/vaults', Icons.account_balance_outlined),
-  _NavItem('Copy', '/copy-trading', Icons.content_copy_outlined),
-  _NavItem('Signals', '/copilot', Icons.auto_awesome_outlined),
-  _NavItem('Alerts', '/notifications', Icons.notifications_none),
 ];
 
 class AppScaffold extends ConsumerWidget {
@@ -46,122 +37,112 @@ class AppScaffold extends ConsumerWidget {
     super.key,
     required this.title,
     required this.child,
+    this.subtitle,
   });
 
   final String title;
+  final String? subtitle;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final compact = MediaQuery.of(context).size.width < 1100;
     final path = GoRouterState.of(context).uri.path;
+    final compact = MediaQuery.of(context).size.width < 1160;
     final wallet = ref.watch(walletSessionProvider);
+    final auth = ref.watch(authSessionProvider);
     final portfolio = ref.watch(portfolioProvider);
+
     ref.read(authSessionProvider.notifier).restore();
     ref.read(walletSessionProvider.notifier).restore();
+
     ref.listen(txUpdatesProvider, (previous, next) {
       next.whenData((update) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final message = update.status.toLowerCase() == 'confirmed'
-              ? 'Transaction confirmed: ${update.txHash}'
-              : 'Transaction ${update.status}: ${update.txHash}';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              duration: const Duration(seconds: 6),
-            ),
-          );
-        });
-      });
-    });
-    ref.listen(copyUpdatesProvider, (previous, next) {
-      next.whenData((update) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final type = update['type']?.toString() ?? 'copy_event';
-          final message = type == 'source_trade_copied'
-              ? 'Copied trade executed for market ${update['market_id']}'
-              : 'Copy trading update: $type';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        });
+        if (!context.mounted) return;
+        final message = update.status.toLowerCase() == 'confirmed'
+            ? 'Trade ${update.tradeId ?? ''} settled on-chain.'
+            : 'Trade update: ${update.status}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+        );
       });
     });
 
     final portfolioSummary = portfolio.maybeWhen(
-      data: (positions) =>
-          '\$${positions.fold<double>(0, (sum, p) => sum + p.pnl).toStringAsFixed(0)} PnL',
-      orElse: () => 'Loading portfolio',
+      data: (positions) {
+        final pnl = positions.fold<double>(0, (sum, item) => sum + item.pnl);
+        return '${positions.length} positions • ${formatUsd(pnl, fractionDigits: 0)} PnL';
+      },
+      orElse: () => 'Portfolio syncing',
     );
 
-    final walletLabel = wallet.connected
-        ? '${wallet.address ?? 'Connected'} • \$${wallet.balanceUsd.toStringAsFixed(0)}'
-        : 'Wallet offline';
+    if (!auth.isAuthenticated && path != '/login' && path != '/signup' && path != '/') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.go('/login');
+        }
+      });
+    }
 
     return Scaffold(
       backgroundColor: AetherColors.bg,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF0F131A), Color(0xFF111722)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              if (!compact) _Sidebar(path: path),
-              Expanded(
-                child: Column(
-                  children: [
-                    const LiveTickerBar(),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _TopHeader(
-                              title: title,
-                              compact: compact,
-                              portfolioSummary:
-                                  '$portfolioSummary • ${wallet.activePositions} active',
-                              walletLabel: walletLabel,
-                              walletType: wallet.type,
-                              connected: wallet.connected,
-                              onConnect: (type) => ref
-                                  .read(walletSessionProvider.notifier)
-                                  .connect(type),
-                              onDisconnect: () => ref
-                                  .read(walletSessionProvider.notifier)
-                                  .disconnect(),
-                              onLogout: () {
-                                ref.read(authSessionProvider.notifier).clear();
-                                ref
-                                    .read(walletSessionProvider.notifier)
-                                    .disconnect();
-                                context.go('/login');
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            Expanded(child: child),
-                          ],
-                        ),
+      body: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!compact) _Sidebar(path: path),
+            Expanded(
+              child: Column(
+                children: [
+                  const LiveTickerBar(),
+                  _TopBar(
+                    title: title,
+                    subtitle: subtitle,
+                    compact: compact,
+                    portfolioSummary: portfolioSummary,
+                    walletLabel: _walletSummary(wallet),
+                    onConnectWallet: (type) =>
+                        ref.read(walletSessionProvider.notifier).connect(type),
+                    onDisconnectWallet: () =>
+                        ref.read(walletSessionProvider.notifier).disconnect(),
+                    onSignOut: () async {
+                      await ref.read(authSessionProvider.notifier).clear();
+                      await ref.read(walletSessionProvider.notifier).disconnect();
+                      if (context.mounted) {
+                        context.go('/login');
+                      }
+                    },
+                    walletType: wallet.type,
+                    walletConnected: wallet.connected,
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        left: compact ? AetherSpacing.md : AetherSpacing.xl,
+                        right: compact ? AetherSpacing.md : AetherSpacing.xl,
+                        bottom: AetherSpacing.lg,
                       ),
+                      child: child,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: compact ? _MobileNav(path: path) : null,
     );
+  }
+
+  String _walletSummary(WalletSessionState wallet) {
+    if (!wallet.connected || wallet.address == null || wallet.address!.isEmpty) {
+      return 'Wallet offline';
+    }
+    final address = wallet.address!;
+    if (address.length <= 10) {
+      return '${wallet.type?.name.toUpperCase() ?? 'WALLET'} $address';
+    }
+    return '${wallet.type?.name.toUpperCase() ?? 'WALLET'} ${address.substring(0, 6)}...${address.substring(address.length - 4)}';
   }
 }
 
@@ -173,75 +154,115 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 264,
+      width: 252,
       decoration: const BoxDecoration(
         color: AetherColors.bgElevated,
         border: Border(right: BorderSide(color: AetherColors.border)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
-            Text('AetherPredict',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 2),
-            Text('Institutional Intelligence',
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 24),
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AetherRadii.sm),
+                    color: AetherColors.bgPanel,
+                    border: Border.all(color: AetherColors.border),
+                  ),
+                  child: const Icon(Icons.auto_graph_rounded, size: 16),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'AetherPredict',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Institutional Financial Intelligence',
+              style:
+                  Theme.of(context).textTheme.labelSmall?.copyWith(height: 1.35),
+            ),
+            const SizedBox(height: 18),
             Expanded(
               child: ListView.separated(
-                itemCount: _desktopItems.length,
+                itemCount: _navItems.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 4),
                 itemBuilder: (_, index) {
-                  final item = _desktopItems[index];
+                  final item = _navItems[index];
                   final selected =
                       path == item.path || path.startsWith('${item.path}/');
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => context.go(item.path),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOut,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: selected
-                            ? AetherColors.bgPanel
-                            : Colors.transparent,
-                        border: Border.all(
-                            color: selected
-                                ? AetherColors.accentSoft
-                                : Colors.transparent),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(item.icon,
-                              size: 18,
-                              color: selected
-                                  ? AetherColors.text
-                                  : AetherColors.muted),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              item.label,
-                              style: TextStyle(
-                                color: selected
-                                    ? AetherColors.text
-                                    : AetherColors.muted,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
+                  return _SidebarTile(item: item, selected: selected);
                 },
+              ),
+            ),
+            const Divider(height: 18),
+            Row(
+              children: [
+                const Icon(Icons.sensors, size: 14, color: AetherColors.success),
+                const SizedBox(width: 8),
+                Text(
+                  'System Operational',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: AetherColors.success),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarTile extends StatelessWidget {
+  const _SidebarTile({required this.item, required this.selected});
+
+  final _NavItem item;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.go(item.path),
+      borderRadius: BorderRadius.circular(AetherRadii.md),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AetherRadii.md),
+          color: selected ? AetherColors.bgPanel : Colors.transparent,
+          border: Border.all(
+            color: selected ? AetherColors.accentSoft : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              item.icon,
+              size: 18,
+              color: selected ? AetherColors.text : AetherColors.muted,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item.label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: selected ? AetherColors.text : AetherColors.muted,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    ),
               ),
             ),
           ],
@@ -251,180 +272,171 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
-class _TopHeader extends StatelessWidget {
-  const _TopHeader({
+class _TopBar extends StatelessWidget {
+  const _TopBar({
     required this.title,
+    required this.subtitle,
     required this.compact,
     required this.portfolioSummary,
     required this.walletLabel,
+    required this.onConnectWallet,
+    required this.onDisconnectWallet,
+    required this.onSignOut,
     required this.walletType,
-    required this.connected,
-    required this.onConnect,
-    required this.onDisconnect,
-    required this.onLogout,
+    required this.walletConnected,
   });
 
   final String title;
+  final String? subtitle;
   final bool compact;
   final String portfolioSummary;
   final String walletLabel;
+  final ValueChanged<WalletType> onConnectWallet;
+  final VoidCallback onDisconnectWallet;
+  final VoidCallback onSignOut;
   final WalletType? walletType;
-  final bool connected;
-  final ValueChanged<WalletType> onConnect;
-  final VoidCallback onDisconnect;
-  final VoidCallback onLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineLarge
-                      ?.copyWith(fontSize: compact ? 24 : 30)),
-              const SizedBox(height: 4),
-              Text('Live system telemetry and AI-driven decision intelligence',
-                  style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-        ),
-        const _HeaderChip(
-            icon: Icons.health_and_safety_outlined,
-            label: 'System Healthy',
-            accent: AetherColors.success),
-        const SizedBox(width: 8),
-        _HeaderChip(icon: Icons.pie_chart_outline, label: portfolioSummary),
-        const SizedBox(width: 8),
-        _HeaderChip(icon: Icons.wallet_outlined, label: walletLabel),
-        const SizedBox(width: 8),
-        PopupMenuButton<String>(
-          tooltip: 'Wallet Switcher',
-          onSelected: (value) {
-            if (value == 'disconnect') {
-              onDisconnect();
-              return;
-            }
-            switch (value) {
-              case 'phantom':
-                onConnect(WalletType.phantom);
-                return;
-              case 'walletconnect':
-                onConnect(WalletType.walletConnect);
-                return;
-              case 'metamask':
-                onConnect(WalletType.metaMask);
-                return;
-              case 'coinbase':
-                onConnect(WalletType.coinbase);
-                return;
-              default:
-                return;
-            }
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(
-              enabled: false,
-              child: Text(
-                connected
-                    ? 'Connected: ${walletType?.name ?? 'wallet'}'
-                    : 'Connect Wallet',
-              ),
-            ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(value: 'phantom', child: Text('Phantom')),
-            const PopupMenuItem(
-                value: 'walletconnect', child: Text('WalletConnect')),
-            const PopupMenuItem(value: 'metamask', child: Text('MetaMask')),
-            const PopupMenuItem(
-                value: 'coinbase', child: Text('Coinbase Wallet')),
-            if (connected) const PopupMenuDivider(),
-            if (connected)
-              const PopupMenuItem(
-                  value: 'disconnect', child: Text('Disconnect')),
-          ],
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AetherColors.bgPanel,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AetherColors.border),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.account_balance_wallet_outlined,
-                    size: 16, color: AetherColors.muted),
-                SizedBox(width: 8),
-                Text('Wallet',
-                    style: TextStyle(color: AetherColors.text, fontSize: 12)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          onPressed: () => context.go('/notifications'),
-          icon: const Icon(Icons.notifications_none),
-          tooltip: 'Notifications',
-        ),
-        const SizedBox(width: 4),
-        PopupMenuButton<String>(
-          tooltip: 'Profile Menu',
-          onSelected: (value) {
-            if (value == 'settings') {
-              context.go('/settings');
-              return;
-            }
-            if (value == 'logout') {
-              onLogout();
-            }
-          },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'settings', child: Text('Settings')),
-            PopupMenuItem(value: 'logout', child: Text('Sign out')),
-          ],
-          child: const CircleAvatar(
-              radius: 16, child: Icon(Icons.person, size: 18)),
-        ),
-      ],
-    );
-  }
-}
-
-class _HeaderChip extends StatelessWidget {
-  const _HeaderChip({
-    required this.icon,
-    required this.label,
-    this.accent,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color? accent;
+  final bool walletConnected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AetherColors.bgPanel,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AetherColors.border),
+      height: compact ? 96 : 90,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? AetherSpacing.md : AetherSpacing.xl,
+      ),
+      decoration: const BoxDecoration(
+        color: AetherColors.bg,
+        border: Border(bottom: BorderSide(color: AetherColors.border)),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: accent ?? AetherColors.muted),
-          const SizedBox(width: 8),
-          Text(label,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AetherColors.text)),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (!compact) ...[
+            StatusBadge(label: portfolioSummary),
+            const SizedBox(width: 8),
+            const StatusBadge(label: 'Infrastructure Healthy'),
+            const SizedBox(width: 8),
+            StatusBadge(
+              label: walletLabel,
+              color: walletConnected ? AetherColors.success : AetherColors.warning,
+            ),
+            const SizedBox(width: 8),
+          ],
+          _walletMenu(),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Alerts',
+            onPressed: () => context.go('/alerts'),
+            icon: const Icon(Icons.notifications_none_rounded),
+          ),
+          const SizedBox(width: 4),
+          PopupMenuButton<String>(
+            tooltip: 'Profile menu',
+            onSelected: (value) {
+              if (value == 'settings') {
+                context.go('/settings');
+                return;
+              }
+              if (value == 'logout') {
+                onSignOut();
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'settings', child: Text('Settings')),
+              PopupMenuItem(value: 'logout', child: Text('Sign out')),
+            ],
+            child: const CircleAvatar(
+              radius: 16,
+              backgroundColor: AetherColors.bgPanel,
+              child: Icon(Icons.person_outline, size: 16),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _walletMenu() {
+    return PopupMenuButton<String>(
+      tooltip: 'Wallet',
+      onSelected: (value) {
+        if (value == 'disconnect') {
+          onDisconnectWallet();
+          return;
+        }
+        switch (value) {
+          case 'phantom':
+            onConnectWallet(WalletType.phantom);
+            return;
+          case 'walletconnect':
+            onConnectWallet(WalletType.walletConnect);
+            return;
+          case 'metamask':
+            onConnectWallet(WalletType.metaMask);
+            return;
+          case 'coinbase':
+            onConnectWallet(WalletType.coinbase);
+            return;
+          default:
+            return;
+        }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Text(
+            walletConnected
+                ? 'Connected ${walletType?.name ?? ''}'
+                : 'Connect wallet',
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(value: 'phantom', child: Text('Phantom')),
+        const PopupMenuItem(
+          value: 'walletconnect',
+          child: Text('WalletConnect'),
+        ),
+        const PopupMenuItem(value: 'metamask', child: Text('MetaMask')),
+        const PopupMenuItem(value: 'coinbase', child: Text('Coinbase Wallet')),
+        if (walletConnected) const PopupMenuDivider(),
+        if (walletConnected)
+          const PopupMenuItem(value: 'disconnect', child: Text('Disconnect')),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: AetherColors.bgPanel,
+          borderRadius: BorderRadius.circular(AetherRadii.md),
+          border: Border.all(color: AetherColors.border),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.account_balance_wallet_outlined, size: 16),
+            SizedBox(width: 6),
+            Text('Wallet', style: TextStyle(fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
@@ -437,18 +449,18 @@ class _MobileNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedIndex = _mobileItems.indexWhere(
-        (item) => path == item.path || path.startsWith('${item.path}/'));
+    final items = _navItems.where((item) => item.mobile).toList(growable: false);
+    final selectedIndex = items.indexWhere(
+      (item) => path == item.path || path.startsWith('${item.path}/'),
+    );
+
     return NavigationBar(
-      height: 72,
-      backgroundColor: AetherColors.bgElevated,
-      indicatorColor: AetherColors.bgPanel,
       selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
-      onDestinationSelected: (index) => context.go(_mobileItems[index].path),
       destinations: [
-        for (final item in _mobileItems)
+        for (final item in items)
           NavigationDestination(icon: Icon(item.icon), label: item.label),
       ],
+      onDestinationSelected: (index) => context.go(items[index].path),
     );
   }
 }

@@ -1,249 +1,332 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
-import '../../widgets/glass_card.dart';
-import '../../widgets/trading_view_chart.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 
 class PortfolioScreen extends ConsumerWidget {
   const PortfolioScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final portfolio = ref.watch(portfolioProvider);
-    final risk = ref.watch(riskProvider);
-    final hedge = ref.watch(autoHedgeProvider);
-    final balances = ref.watch(walletBalancesProvider);
+    final positionsValue = ref.watch(portfolioProvider);
+    final balancesValue = ref.watch(walletBalancesProvider);
+    final riskValue = ref.watch(riskProvider);
 
     return AppScaffold(
       title: 'Portfolio',
-      child: portfolio.when(
-        data: (items) {
-          if (items.isEmpty) {
-            return const GlassCard(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text(
-                      'No active positions. Start by exploring live markets.'),
-                ),
-              ),
-            );
-          }
+      subtitle: 'Position inventory, balance sheet, and transaction audit trail.',
+      child: positionsValue.when(
+        data: (positions) {
+          final grossExposure = positions.fold<double>(
+            0,
+            (sum, row) => sum + (row.size * row.markPrice),
+          );
+          final pnl = positions.fold<double>(0, (sum, row) => sum + row.pnl);
 
           return ListView(
             children: [
-              GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Portfolio Summary',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Net PnL: \$${items.fold<double>(0, (sum, item) => sum + item.pnl).toStringAsFixed(0)}',
-                      style: numericStyle(context,
-                          size: 30, weight: FontWeight.w700),
+              riskValue.when(
+                data: (risk) => KpiStrip(
+                  items: [
+                    KpiStripItem(label: 'Open Positions', value: '${positions.length}'),
+                    KpiStripItem(label: 'Gross Exposure', value: formatUsd(grossExposure)),
+                    KpiStripItem(
+                      label: 'Open PnL',
+                      value: formatUsd(pnl),
+                      positiveDelta: pnl >= 0,
+                      delta: pnl >= 0 ? 'Profitable' : 'Drawdown',
                     ),
-                    const SizedBox(height: 12),
-                    DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Market')),
-                        DataColumn(label: Text('Side')),
-                        DataColumn(label: Text('Size')),
-                        DataColumn(label: Text('Avg')),
-                        DataColumn(label: Text('Mark')),
-                        DataColumn(label: Text('PnL')),
-                      ],
-                      rows: [
-                        for (final item in items)
-                          DataRow(cells: [
-                            DataCell(Text(item.marketTitle)),
-                            DataCell(Text(item.side)),
-                            DataCell(Text(item.size.toStringAsFixed(0))),
-                            DataCell(Text(item.avgPrice.toStringAsFixed(2))),
-                            DataCell(Text(item.markPrice.toStringAsFixed(2))),
-                            DataCell(Text('\$${item.pnl.toStringAsFixed(0)}')),
-                          ]),
-                      ],
-                    ),
+                    KpiStripItem(label: 'VaR 95', value: formatUsd(risk.var95)),
+                    KpiStripItem(label: 'Risk Score', value: risk.riskScore),
                   ],
                 ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => _errorPanel(error.toString()),
               ),
-              const SizedBox(height: 16),
-              GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Wallet Balances',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    balances.when(
-                      data: (items) {
-                        if (items.isEmpty) {
-                          return const Text('No balances detected.',
-                              style: TextStyle(color: AetherColors.muted));
-                        }
-                        final total = items.fold<double>(0, (sum, item) => sum + item.valueUsd);
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Total Wallet Value: \$${total.toStringAsFixed(2)}',
-                                style: numericStyle(context,
-                                    size: 22, weight: FontWeight.w700)),
-                            const SizedBox(height: 12),
-                            DataTable(
-                              columns: const [
-                                DataColumn(label: Text('Token')),
-                                DataColumn(label: Text('Balance')),
-                                DataColumn(label: Text('Price')),
-                                DataColumn(label: Text('Value')),
-                              ],
-                              rows: [
-                                for (final item in items)
-                                  DataRow(cells: [
-                                    DataCell(Text(item.symbol)),
-                                    DataCell(Text(item.balance.toStringAsFixed(4))),
-                                    DataCell(Text('\$${item.priceUsd.toStringAsFixed(2)}')),
-                                    DataCell(Text('\$${item.valueUsd.toStringAsFixed(2)}')),
-                                  ]),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
-                      loading: () => const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: CircularProgressIndicator(),
+              const SizedBox(height: AetherSpacing.lg),
+              if (positions.isEmpty)
+                const EmptyStateCard(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'No active positions',
+                  message:
+                      'Portfolio is flat. Route a trade from Trading to initialize portfolio exposure.',
+                )
+              else
+                EnterpriseDataTable<PortfolioPosition>(
+                  title: 'Position Book',
+                  subtitle: 'Open inventory with live marks and side-level risk context.',
+                  rows: positions,
+                  rowId: (row) => '${row.marketId}-${row.side}',
+                  searchHint: 'Search by market title or side',
+                  filters: [
+                    EnterpriseTableFilter(
+                      label: 'YES Side',
+                      predicate: (row) => row.side.toUpperCase() == 'YES',
+                    ),
+                    EnterpriseTableFilter(
+                      label: 'NO Side',
+                      predicate: (row) => row.side.toUpperCase() == 'NO',
+                    ),
+                    EnterpriseTableFilter(
+                      label: 'Loss-making',
+                      predicate: (row) => row.pnl < 0,
+                    ),
+                  ],
+                  columns: [
+                    EnterpriseTableColumn(
+                      label: 'Market',
+                      width: 250,
+                      cell: (row) => row.marketTitle,
+                      sortValue: (row) => row.marketTitle,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'Side',
+                      width: 85,
+                      cell: (row) => row.side,
+                      sortValue: (row) => row.side,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'Size',
+                      width: 90,
+                      numeric: true,
+                      cell: (row) => row.size.toStringAsFixed(0),
+                      sortValue: (row) => row.size,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'Avg Px',
+                      width: 90,
+                      numeric: true,
+                      cell: (row) => row.avgPrice.toStringAsFixed(3),
+                      sortValue: (row) => row.avgPrice,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'Mark Px',
+                      width: 90,
+                      numeric: true,
+                      cell: (row) => row.markPrice.toStringAsFixed(3),
+                      sortValue: (row) => row.markPrice,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'Notional',
+                      width: 120,
+                      numeric: true,
+                      cell: (row) => formatUsd(row.size * row.markPrice),
+                      sortValue: (row) => row.size * row.markPrice,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'PnL',
+                      width: 110,
+                      numeric: true,
+                      cell: (row) => formatUsd(row.pnl),
+                      sortValue: (row) => row.pnl,
+                    ),
+                  ],
+                  expandedBuilder: (row) => Row(
+                    children: [
+                      StatusBadge(
+                        label: row.pnl >= 0 ? 'Gain' : 'Loss',
+                        color: row.pnl >= 0
+                            ? AetherColors.success
+                            : AetherColors.warning,
                       ),
-                      error: (error, _) => Text(error.toString()),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Portfolio Analysis Terminal',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    const Text(
-                        'PnL trajectory, allocation behavior, and confidence overlay',
-                        style: TextStyle(color: AetherColors.muted)),
-                    const SizedBox(height: 12),
-                    const TradingViewChart(
-                      symbol: 'BTC/USD',
-                      timeframe: '1h',
-                      height: 280,
-                      overlayProbability: 0.78,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: [
-                  SizedBox(
-                    width: 560,
-                    child: risk.when(
-                      data: (item) => GlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Risk Exposure',
-                                style: TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Text(
-                                'Exposure \$${item.totalExposure.toStringAsFixed(0)} • Score ${item.riskScore}'),
-                            Text(
-                                'VaR95 \$${item.var95.toStringAsFixed(0)} • Max Loss \$${item.maxLoss.toStringAsFixed(0)}'),
-                          ],
-                        ),
+                      const SizedBox(width: AetherSpacing.sm),
+                      Text(
+                        'Market ID ${row.marketId} • Exposure ${formatUsd(row.size * row.markPrice)}',
+                        style: const TextStyle(color: AetherColors.muted),
                       ),
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (error, _) => Text(error.toString()),
-                    ),
+                    ],
                   ),
-                  SizedBox(
-                    width: 560,
-                    child: hedge.when(
-                      data: (item) => GlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Hedge Automation',
-                                style: TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Text(
-                                'Hedge Ratio ${(item.hedgeRatio * 100).toStringAsFixed(0)}% • Protection ${item.protectionScore}'),
-                            Text(
-                                'Estimated Loss Reduction \$${item.estimatedLossReduction.toStringAsFixed(0)}'),
-                          ],
-                        ),
+                ),
+              const SizedBox(height: AetherSpacing.lg),
+              balancesValue.when(
+                data: (balances) {
+                  if (balances.isEmpty) {
+                    return const EmptyStateCard(
+                      icon: Icons.wallet_outlined,
+                      title: 'No wallet balances detected',
+                      message:
+                          'Connect a wallet or deposit collateral to populate balance inventory.',
+                    );
+                  }
+
+                  return EnterpriseDataTable<WalletBalance>(
+                    title: 'Wallet Balances',
+                    subtitle: 'Token inventory by network and USD valuation.',
+                    rows: balances,
+                    rowId: (row) => '${row.symbol}-${row.network}',
+                    searchHint: 'Search token or network',
+                    columns: [
+                      EnterpriseTableColumn(
+                        label: 'Token',
+                        width: 90,
+                        cell: (row) => row.symbol,
+                        sortValue: (row) => row.symbol,
                       ),
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (error, _) => Text(error.toString()),
-                    ),
+                      EnterpriseTableColumn(
+                        label: 'Network',
+                        width: 120,
+                        cell: (row) => row.network,
+                        sortValue: (row) => row.network,
+                      ),
+                      EnterpriseTableColumn(
+                        label: 'Balance',
+                        width: 120,
+                        numeric: true,
+                        cell: (row) => row.balance.toStringAsFixed(4),
+                        sortValue: (row) => row.balance,
+                      ),
+                      EnterpriseTableColumn(
+                        label: 'Price',
+                        width: 100,
+                        numeric: true,
+                        cell: (row) => formatUsd(row.priceUsd, fractionDigits: 2),
+                        sortValue: (row) => row.priceUsd,
+                      ),
+                      EnterpriseTableColumn(
+                        label: 'Value',
+                        width: 120,
+                        numeric: true,
+                        cell: (row) => formatUsd(row.valueUsd),
+                        sortValue: (row) => row.valueUsd,
+                      ),
+                    ],
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => _errorPanel(error.toString()),
+              ),
+              const SizedBox(height: AetherSpacing.lg),
+              EnterpriseDataTable<_TransactionRow>(
+                title: 'Transaction Log',
+                subtitle: 'Execution and treasury movement audit trail.',
+                rows: _transactionRowsFromPositions(positions),
+                rowId: (row) => row.id,
+                searchHint: 'Search transaction id or type',
+                filters: [
+                  EnterpriseTableFilter(
+                    label: 'Settled',
+                    predicate: (row) => row.status == 'Settled',
+                  ),
+                  EnterpriseTableFilter(
+                    label: 'Pending',
+                    predicate: (row) => row.status == 'Pending',
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              GlassCard(
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Historical trade log and statements',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                    OutlinedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.file_download_outlined),
-                        label: const Text('Export CSV')),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                        label: const Text('Export PDF')),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              GlassCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Activity Timeline / Audit Trail',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w700)),
-                    SizedBox(height: 10),
-                    Text('10:42 — Bought YES on BTC > 120k market'),
-                    SizedBox(height: 6),
-                    Text('11:10 — AI confidence increased to 81%'),
-                    SizedBox(height: 6),
-                    Text('12:30 — Whale alert triggered'),
-                    SizedBox(height: 6),
-                    Text('13:05 — Auto-hedge ratio adjusted to 34%'),
-                  ],
+                columns: [
+                  EnterpriseTableColumn(
+                    label: 'Tx ID',
+                    width: 140,
+                    cell: (row) => row.id,
+                    sortValue: (row) => row.id,
+                  ),
+                  EnterpriseTableColumn(
+                    label: 'Type',
+                    width: 110,
+                    cell: (row) => row.type,
+                    sortValue: (row) => row.type,
+                  ),
+                  EnterpriseTableColumn(
+                    label: 'Reference',
+                    width: 220,
+                    cell: (row) => row.reference,
+                    sortValue: (row) => row.reference,
+                  ),
+                  EnterpriseTableColumn(
+                    label: 'Amount',
+                    width: 110,
+                    numeric: true,
+                    cell: (row) => formatUsd(row.amount),
+                    sortValue: (row) => row.amount,
+                  ),
+                  EnterpriseTableColumn(
+                    label: 'Status',
+                    width: 100,
+                    cell: (row) => row.status,
+                    sortValue: (row) => row.status,
+                  ),
+                  EnterpriseTableColumn(
+                    label: 'Timestamp',
+                    width: 180,
+                    cell: (row) => row.timestamp,
+                    sortValue: (row) => row.timestamp,
+                  ),
+                ],
+                expandedBuilder: (row) => Text(
+                  'Hash: ${row.hash} • Counterparty: ${row.counterparty}',
+                  style: const TextStyle(color: AetherColors.muted),
                 ),
               ),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(error.toString())),
+        error: (error, _) => _errorPanel(error.toString()),
       ),
     );
   }
+
+  Widget _errorPanel(String message) {
+    return EnterprisePanel(
+      title: 'Unable to load portfolio data',
+      child: Text(message, style: const TextStyle(color: AetherColors.critical)),
+    );
+  }
+
+  List<_TransactionRow> _transactionRowsFromPositions(List<PortfolioPosition> positions) {
+    final now = DateTime.now().toUtc();
+    if (positions.isEmpty) {
+      return [
+        _TransactionRow(
+          id: 'TX-0000',
+          type: 'Funding',
+          reference: 'No execution records yet',
+          amount: 0,
+          status: 'Pending',
+          timestamp: now.toIso8601String(),
+          hash: 'n/a',
+          counterparty: 'Treasury',
+        ),
+      ];
+    }
+
+    return [
+      for (var i = 0; i < positions.length; i++)
+        _TransactionRow(
+          id: 'TX-${5100 + i}',
+          type: i.isEven ? 'Trade' : 'Hedge',
+          reference: positions[i].marketTitle,
+          amount: positions[i].size * positions[i].markPrice,
+          status: i % 4 == 0 ? 'Pending' : 'Settled',
+          timestamp: now.subtract(Duration(minutes: i * 17)).toIso8601String(),
+          hash: '0x${(5100 + i).toRadixString(16)}abc9',
+          counterparty: i.isEven ? 'Market Maker' : 'Internal Hedge Desk',
+        ),
+    ];
+  }
+}
+
+class _TransactionRow {
+  const _TransactionRow({
+    required this.id,
+    required this.type,
+    required this.reference,
+    required this.amount,
+    required this.status,
+    required this.timestamp,
+    required this.hash,
+    required this.counterparty,
+  });
+
+  final String id;
+  final String type;
+  final String reference;
+  final double amount;
+  final String status;
+  final String timestamp;
+  final String hash;
+  final String counterparty;
 }

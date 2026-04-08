@@ -1,13 +1,14 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
-import '../../widgets/glass_card.dart';
-import '../../widgets/market_depth_panel.dart';
-import '../../widgets/news_signal_panel.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 import '../../widgets/trading_view_chart.dart';
 
 class MarketDetailScreen extends ConsumerStatefulWidget {
@@ -18,497 +19,609 @@ class MarketDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
-  bool autoHedge = true;
-  bool insurance = false;
-  double size = 1500;
-  String timeframe = '15m';
-  String? tradeStatus;
-  String? tradeError;
-  int? pendingTradeId;
-  String? pendingTxHash;
+  String _timeframe = '15m';
 
   @override
   Widget build(BuildContext context) {
-    final market = ref.watch(selectedMarketProvider);
-    final copilot = ref.watch(copilotProvider);
-    final sentiment = ref.watch(sentimentFeedProvider);
-    final comments = ref.watch(discussionProvider);
+    final selected = ref.watch(selectedMarketProvider);
+    final sentimentValue = ref.watch(sentimentFeedProvider);
+    final copilotValue = ref.watch(copilotProvider);
     final wallet = ref.watch(walletSessionProvider);
 
-    ref.listen(txUpdatesProvider, (previous, next) {
-      next.whenData((update) {
-        if (pendingTradeId == update.tradeId) {
-          setState(() {
-            tradeStatus = update.status.toLowerCase();
-            pendingTxHash = update.txHash;
-          });
-        }
-      });
-    });
-
     return AppScaffold(
-      title: 'Market Detail',
-      child: market.when(
-        data: (item) => LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 1200;
-            if (compact) {
-              return SingleChildScrollView(
-                child: Column(
+      title: 'Market Workspace',
+      subtitle: 'Market intelligence, evidence, and execution controls in a single desk view.',
+      child: selected.when(
+        data: (market) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 1320;
+              if (compact) {
+                return ListView(
                   children: [
-                    _mainContent(item, sentiment, comments, compact: true),
-                    const SizedBox(height: 16),
-                    _tradePanel(item, copilot, wallet),
+                    _leftZone(market),
+                    const SizedBox(height: AetherSpacing.lg),
+                    _centerZone(
+                      market,
+                      sentimentValue,
+                      copilotValue,
+                      compact: true,
+                    ),
+                    const SizedBox(height: AetherSpacing.lg),
+                    _rightZone(market, wallet.connected),
                   ],
-                ),
-              );
-            }
+                );
+              }
 
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child:
-                        _mainContent(item, sentiment, comments, compact: false),
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 430,
+                    child: ListView(
+                      children: [_leftZone(market)],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 360,
-                  child: SingleChildScrollView(
-                    child: _tradePanel(item, copilot, wallet),
+                  const SizedBox(width: AetherSpacing.lg),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        _centerZone(
+                          market,
+                          sentimentValue,
+                          copilotValue,
+                          compact: false,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
+                  const SizedBox(width: AetherSpacing.lg),
+                  SizedBox(
+                    width: 350,
+                    child: ListView(
+                      children: [_rightZone(market, wallet.connected)],
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(error.toString())),
+        error: (error, _) => EnterprisePanel(
+          title: 'Unable to load market workspace',
+          child: Text(
+            error.toString(),
+            style: const TextStyle(color: AetherColors.critical),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _mainContent(
-    Market item,
-    AsyncValue<SentimentFeed> sentiment,
-    AsyncValue<List<DiscussionComment>> comments, {
-    required bool compact,
-  }) {
+  Widget _leftZone(Market market) {
+    final symbol = _marketSymbol(market.title);
+
     return Column(
       children: [
-        GlassCard(
+        EnterprisePanel(
+          title: 'TradingView Price',
+          subtitle: '$symbol • ${market.category}',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
                 children: [
-                  Expanded(
+                  for (final tf in const ['1m', '5m', '15m', '1h', '4h', '1D'])
+                    ChoiceChip(
+                      label: Text(tf),
+                      selected: _timeframe == tf,
+                      onSelected: (_) => setState(() => _timeframe = tf),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              TradingViewChart(
+                symbol: symbol,
+                timeframe: _timeframe,
+                height: 260,
+                overlayProbability: market.yesProbability,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AetherSpacing.lg),
+        EnterprisePanel(
+          title: 'Probability Drift',
+          subtitle: 'Model probability changes over recent snapshots.',
+          child: SizedBox(
+            height: 170,
+            child: CustomPaint(
+              painter: _ProbabilityPainter(points: market.points),
+              child: Container(),
+            ),
+          ),
+        ),
+        const SizedBox(height: AetherSpacing.lg),
+        EnterpriseDataTable<_OrderFlowRow>(
+          title: 'Order Flow',
+          subtitle: 'Top-of-book pressure and directional skew.',
+          rows: _orderFlowRows(market),
+          rowId: (row) => row.level,
+          searchHint: 'Search order flow',
+          columns: [
+            EnterpriseTableColumn(
+              label: 'Level',
+              width: 70,
+              cell: (row) => row.level,
+              sortValue: (row) => row.level,
+            ),
+            EnterpriseTableColumn(
+              label: 'Bid Notional',
+              width: 130,
+              numeric: true,
+              cell: (row) => formatUsd(row.bid),
+              sortValue: (row) => row.bid,
+            ),
+            EnterpriseTableColumn(
+              label: 'Ask Notional',
+              width: 130,
+              numeric: true,
+              cell: (row) => formatUsd(row.ask),
+              sortValue: (row) => row.ask,
+            ),
+            EnterpriseTableColumn(
+              label: 'Imbalance',
+              width: 90,
+              numeric: true,
+              cell: (row) => '${row.imbalance.toStringAsFixed(1)}%',
+              sortValue: (row) => row.imbalance,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _centerZone(
+    Market market,
+    AsyncValue<SentimentFeed> sentimentValue,
+    AsyncValue<CopilotRecommendation> copilotValue,
+    {required bool compact},
+  ) {
+    return Column(
+      children: [
+        EnterprisePanel(
+          title: market.title,
+          subtitle: 'Market Thesis',
+          trailing: Wrap(
+            spacing: AetherSpacing.sm,
+            children: [
+              StatusBadge(
+                label: '${(market.yesProbability * 100).toStringAsFixed(1)}% YES',
+              ),
+              StatusBadge(
+                label:
+                    '${(market.aiConfidence * 100).toStringAsFixed(1)}% AI confidence',
+              ),
+            ],
+          ),
+          child: Text(
+            'This market remains sensitive to macro liquidity and short-term volatility bursts. The desk thesis favors disciplined sizing with risk-off hedges during event-heavy windows.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+        const SizedBox(height: AetherSpacing.lg),
+        if (compact)
+          Column(
+            children: [
+              sentimentValue.when(
+                data: (sentiment) => EnterprisePanel(
+                  title: 'Signal Context',
+                  subtitle: 'Sentiment and source-level signal composition.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          StatusBadge(label: 'Trend ${sentiment.trend}'),
+                          const SizedBox(width: AetherSpacing.sm),
+                          StatusBadge(
+                            label: 'Shift ${sentiment.confidenceShift} bps',
+                            color: sentiment.confidenceShift >= 0
+                                ? AetherColors.success
+                                : AetherColors.warning,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AetherSpacing.md),
+                      Text(
+                        'Sentiment score ${sentiment.sentimentScore.toStringAsFixed(2)} with ${sentiment.newsItems.length} active source inputs.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: AetherSpacing.md),
+                      for (final item in sentiment.newsItems.take(4))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text('• ${item.headline} (${item.source})'),
+                        ),
+                    ],
+                  ),
+                ),
+                loading: () => const EnterprisePanel(
+                  title: 'Signal Context',
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, _) => EnterprisePanel(
+                  title: 'Signal Context',
+                  child: Text(
+                    error.toString(),
+                    style: const TextStyle(color: AetherColors.critical),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AetherSpacing.lg),
+              copilotValue.when(
+                data: (advice) => EnterprisePanel(
+                  title: 'AI Insights',
+                  subtitle: 'Action recommendation with confidence and risk context.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          StatusBadge(label: advice.action),
+                          const SizedBox(width: AetherSpacing.sm),
+                          StatusBadge(label: '${advice.confidence}% confidence'),
+                        ],
+                      ),
+                      const SizedBox(height: AetherSpacing.md),
+                      Text(advice.reasoning),
+                      const SizedBox(height: AetherSpacing.md),
+                      LinearProgressIndicator(
+                        minHeight: 8,
+                        value: advice.confidence / 100,
+                        borderRadius: BorderRadius.circular(999),
+                        backgroundColor: AetherColors.bgPanel,
+                      ),
+                      const SizedBox(height: AetherSpacing.sm),
+                      Text(
+                        'Risk posture: ${advice.risk} • Suggested size: ${advice.positionSize}',
+                        style: const TextStyle(color: AetherColors.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                loading: () => const EnterprisePanel(
+                  title: 'AI Insights',
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, _) => EnterprisePanel(
+                  title: 'AI Insights',
+                  child: Text(
+                    error.toString(),
+                    style: const TextStyle(color: AetherColors.critical),
+                  ),
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: sentimentValue.when(
+                  data: (sentiment) => EnterprisePanel(
+                    title: 'Signal Context',
+                    subtitle: 'Sentiment and source-level signal composition.',
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.title,
-                            style: const TextStyle(
-                                fontSize: 26, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            StatusBadge(label: 'Trend ${sentiment.trend}'),
+                            const SizedBox(width: AetherSpacing.sm),
+                            StatusBadge(
+                              label: 'Shift ${sentiment.confidenceShift} bps',
+                              color: sentiment.confidenceShift >= 0
+                                  ? AetherColors.success
+                                  : AetherColors.warning,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AetherSpacing.md),
                         Text(
-                          'Category: ${item.category} • Oracle: ${item.oracleSource}',
+                          'Sentiment score ${sentiment.sentimentScore.toStringAsFixed(2)} with ${sentiment.newsItems.length} active source inputs.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: AetherSpacing.md),
+                        for (final item in sentiment.newsItems.take(4))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text('• ${item.headline} (${item.source})'),
+                          ),
+                      ],
+                    ),
+                  ),
+                  loading: () => const EnterprisePanel(
+                    title: 'Signal Context',
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (error, _) => EnterprisePanel(
+                    title: 'Signal Context',
+                    child: Text(
+                      error.toString(),
+                      style: const TextStyle(color: AetherColors.critical),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AetherSpacing.lg),
+              Expanded(
+                child: copilotValue.when(
+                  data: (advice) => EnterprisePanel(
+                    title: 'AI Insights',
+                    subtitle: 'Action recommendation with confidence and risk context.',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            StatusBadge(label: advice.action),
+                            const SizedBox(width: AetherSpacing.sm),
+                            StatusBadge(label: '${advice.confidence}% confidence'),
+                          ],
+                        ),
+                        const SizedBox(height: AetherSpacing.md),
+                        Text(advice.reasoning),
+                        const SizedBox(height: AetherSpacing.md),
+                        LinearProgressIndicator(
+                          minHeight: 8,
+                          value: advice.confidence / 100,
+                          borderRadius: BorderRadius.circular(999),
+                          backgroundColor: AetherColors.bgPanel,
+                        ),
+                        const SizedBox(height: AetherSpacing.sm),
+                        Text(
+                          'Risk posture: ${advice.risk} • Suggested size: ${advice.positionSize}',
                           style: const TextStyle(color: AetherColors.muted),
                         ),
                       ],
                     ),
                   ),
-                  _countdownChip(),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final tf in const ['1m', '5m', '15m', '1h', '4h', '1D'])
-                    ChoiceChip(
-                      label: Text(tf),
-                      selected: timeframe == tf,
-                      onSelected: (_) => setState(() => timeframe = tf),
+                  loading: () => const EnterprisePanel(
+                    title: 'AI Insights',
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (error, _) => EnterprisePanel(
+                    title: 'AI Insights',
+                    child: Text(
+                      error.toString(),
+                      style: const TextStyle(color: AetherColors.critical),
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (compact)
-                Column(
-                  children: [
-                    TradingViewChart(
-                      symbol: _marketSymbol(item.title),
-                      timeframe: timeframe,
-                      height: 300,
-                      overlayProbability: item.yesProbability,
-                    ),
-                    const SizedBox(height: 12),
-                    MarketDepthPanel(symbol: _marketSymbol(item.title).split('/').first),
-                  ],
-                )
-              else
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TradingViewChart(
-                        symbol: _marketSymbol(item.title),
-                        timeframe: timeframe,
-                        height: 360,
-                        overlayProbability: item.yesProbability,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 330, child: MarketDepthPanel(symbol: _marketSymbol(item.title).split('/').first)),
-                  ],
+                  ),
                 ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _explainabilityPanel(item, sentiment),
-        const SizedBox(height: 16),
-        sentiment.when(
-          data: (feed) => NewsSignalPanel(feed: feed),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => GlassCard(
-            child: Text(error.toString(),
-                style: const TextStyle(color: AetherColors.muted)),
-          ),
-        ),
-        const SizedBox(height: 16),
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Activity Timeline / Audit Trail',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              const Text(
-                'No audit events have been recorded for this market yet.',
-                style: TextStyle(color: AetherColors.muted),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 16),
-        comments.when(
-          data: (items) => GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Discussion Thread',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 10),
-                ...items.take(4).map(
-                      (c) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text('${c.author}: ${c.content}'),
-                      ),
-                    ),
-              ],
+        const SizedBox(height: AetherSpacing.lg),
+        EnterpriseDataTable<_EvidenceRow>(
+          title: 'Evidence Ledger',
+          subtitle: 'Source credibility and thesis weighting used by the model.',
+          rows: _evidenceRows(market),
+          rowId: (row) => row.id,
+          searchHint: 'Search evidence',
+          filters: [
+            EnterpriseTableFilter(
+              label: 'High Weight',
+              predicate: (row) => row.weight >= 0.25,
             ),
-          ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Text(error.toString()),
-        ),
-        const SizedBox(height: 16),
-        GlassCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Dispute Section',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              SizedBox(height: 10),
-              Text('No open disputes are recorded for this market right now.'),
-              SizedBox(height: 8),
-              Text(
-                  'Claims and evidence submissions are recorded in immutable audit logs.'),
-            ],
+            EnterpriseTableFilter(
+              label: 'Low Confidence',
+              predicate: (row) => row.confidence < 0.75,
+            ),
+          ],
+          columns: [
+            EnterpriseTableColumn(
+              label: 'Source',
+              width: 180,
+              cell: (row) => row.source,
+              sortValue: (row) => row.source,
+            ),
+            EnterpriseTableColumn(
+              label: 'Signal',
+              width: 260,
+              cell: (row) => row.signal,
+              sortValue: (row) => row.signal,
+            ),
+            EnterpriseTableColumn(
+              label: 'Weight',
+              width: 80,
+              numeric: true,
+              cell: (row) => '${(row.weight * 100).toStringAsFixed(0)}%',
+              sortValue: (row) => row.weight,
+            ),
+            EnterpriseTableColumn(
+              label: 'Confidence',
+              width: 100,
+              numeric: true,
+              cell: (row) => '${(row.confidence * 100).toStringAsFixed(0)}%',
+              sortValue: (row) => row.confidence,
+            ),
+          ],
+          expandedBuilder: (row) => Text(
+            'Validation note: ${row.note}',
+            style: const TextStyle(color: AetherColors.muted),
           ),
         ),
       ],
     );
   }
 
-  Widget _tradePanel(Market item, AsyncValue<CopilotRecommendation> copilot, WalletSessionState wallet) {
-    final yesPrice = item.yesProbability;
-    final noPrice = 1 - item.yesProbability;
-    final estPnl = (size * (yesPrice - 0.55));
+  Widget _rightZone(Market market, bool walletConnected) {
+    final yesCost = market.yesProbability;
+    final noCost = 1 - market.yesProbability;
 
     return Column(
       children: [
-        GlassCard(
+        EnterprisePanel(
+          title: 'Execution',
+          subtitle: 'Route through the controlled multi-step trade flow.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Trading Console',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
-                    child: FilledButton(
-                      onPressed: wallet.connected ? () => _executeTrade(item, 'YES') : null,
-                      child: Text(
-                          'Buy YES ${(yesPrice * 100).toStringAsFixed(1)}%'),
+                    child: _priceTile(
+                      label: 'YES Price',
+                      value: '${(yesCost * 100).toStringAsFixed(1)}c',
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AetherSpacing.sm),
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: wallet.connected ? () => _executeTrade(item, 'NO') : null,
-                      child:
-                          Text('Buy NO ${(noPrice * 100).toStringAsFixed(1)}%'),
+                    child: _priceTile(
+                      label: 'NO Price',
+                      value: '${(noCost * 100).toStringAsFixed(1)}c',
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              if (!wallet.connected)
-                const Text(
-                  'Connect a wallet to execute live trades.',
-                  style: TextStyle(color: AetherColors.muted),
+              const SizedBox(height: AetherSpacing.md),
+              StatusBadge(
+                label: walletConnected
+                    ? 'Wallet connected'
+                    : 'Wallet required for execution',
+                color:
+                    walletConnected ? AetherColors.success : AetherColors.warning,
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => context.go('/trading'),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Start Trade Workflow'),
                 ),
-              if (tradeStatus != null) ...[
-                const SizedBox(height: 12),
-                _tradeStatusCard(),
-              ],
-              Text('Position Size: \$${size.toStringAsFixed(0)}'),
-              Slider(
-                  value: size,
-                  min: 100,
-                  max: 10000,
-                  onChanged: (v) => setState(() => size = v)),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Auto Hedge'),
-                value: autoHedge,
-                onChanged: (v) => setState(() => autoHedge = v),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Insurance Cover'),
-                value: insurance,
-                onChanged: (v) => setState(() => insurance = v),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Estimated PnL: ${estPnl >= 0 ? '+' : ''}\$${estPnl.toStringAsFixed(0)}',
-                style: TextStyle(
-                    color: estPnl >= 0
-                        ? AetherColors.success
-                        : AetherColors.critical),
-              ),
-              const Text('Slippage Preview: 0.42%',
-                  style: TextStyle(color: AetherColors.muted)),
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        copilot.when(
-          data: (advice) => GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('AI Recommendation',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Text('${advice.action} • ${advice.confidence}% confidence'),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                    value: advice.confidence / 100, minHeight: 8),
-                const SizedBox(height: 10),
-                Text('Risk: ${advice.risk}',
-                    style: const TextStyle(color: AetherColors.warning)),
-                const SizedBox(height: 8),
-                Text(advice.reasoning),
-              ],
-            ),
+        const SizedBox(height: AetherSpacing.lg),
+        EnterprisePanel(
+          title: 'Risk Panel',
+          subtitle: 'Pre-trade controls and desk limits.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _riskLine('Max position notional', '$150,000'),
+              _riskLine('Current desk utilization', '64%'),
+              _riskLine('Slippage guardrail', '80 bps'),
+              _riskLine('Auto-hedge policy', 'Enabled'),
+            ],
           ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Text(error.toString()),
+        ),
+        const SizedBox(height: AetherSpacing.lg),
+        EnterprisePanel(
+          title: 'Wallet Summary',
+          subtitle: 'Settlement context and gas readiness.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text('Collateral token: USDC'),
+              SizedBox(height: 6),
+              Text('Estimated gas: 0.0012 ETH'),
+              SizedBox(height: 6),
+              Text('Settlement chain: HashKey L2'),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _explainabilityPanel(
-      Market item, AsyncValue<SentimentFeed> sentiment) {
-    return GlassCard(
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        collapsedIconColor: AetherColors.muted,
-        iconColor: AetherColors.text,
-        title: const Text('AI Explainability Panel',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        subtitle: const Text(
-            'Transparent contributors, evidence, and reasoning chain'),
-        children: [
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                  child: _infoTile('Confidence',
-                      '${(item.aiConfidence * 100).toStringAsFixed(0)}%')),
-              const SizedBox(width: 8),
-              Expanded(child: _infoTile('Historical Accuracy', '79.4%')),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _infoTile(
-                  'Sentiment Score',
-                  sentiment.maybeWhen(
-                      data: (s) => s.sentimentScore.toStringAsFixed(2),
-                      orElse: () => '--'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text('Contributors',
-              style: TextStyle(color: AetherColors.muted)),
-          const SizedBox(height: 8),
-          const Text('+ ETF inflows +18%',
-              style: TextStyle(color: AetherColors.success)),
-          const Text('+ volume momentum +12%',
-              style: TextStyle(color: AetherColors.success)),
-          const Text('- regulatory uncertainty -5%',
-              style: TextStyle(color: AetherColors.warning)),
-          const SizedBox(height: 10),
-          const Text('Evidence Sources',
-              style: TextStyle(color: AetherColors.muted)),
-          const SizedBox(height: 6),
-          const Text(
-              '• HashKey oracle mesh\n• ETF desk flow feed\n• On-chain volume monitor'),
-          const SizedBox(height: 10),
-          const Text('Reasoning Chain',
-              style: TextStyle(color: AetherColors.muted)),
-          const SizedBox(height: 6),
-          const Text(
-              'Momentum remains constructive while volatility is elevated. Recommendation keeps directional exposure with protective hedging enabled.'),
-          const SizedBox(height: 6),
-        ],
-      ),
-    );
-  }
-
-  Widget _tradeStatusCard() {
-    final status = tradeStatus ?? 'idle';
-    final message = switch (status) {
-      'awaiting_wallet_signature' => 'Awaiting signature in wallet.',
-      'signing_rejected' => 'Signature rejected in wallet.',
-      'broadcasting' => 'Broadcasting transaction to HashKey Chain.',
-      'pending_confirmation' => 'Transaction submitted. Awaiting confirmation.',
-      'confirmed' => 'Trade confirmed on-chain.',
-      'failed' => tradeError ?? 'Trade failed.',
-      'reverted' => 'Transaction reverted on-chain.',
-      _ => 'Preparing trade.',
-    };
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Trade Status: $status',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Text(message, style: const TextStyle(color: AetherColors.muted)),
-          if (pendingTxHash != null) ...[
-            const SizedBox(height: 6),
-            Text('Tx Hash: $pendingTxHash',
-                style: numericStyle(context, size: 12)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _executeTrade(Market item, String side) async {
-    setState(() {
-      tradeStatus = 'awaiting_wallet_signature';
-      tradeError = null;
-      pendingTxHash = null;
-    });
-    try {
-      final wallet = ref.read(walletSessionProvider);
-      final api = ref.read(apiClientProvider);
-      final walletService = ref.read(walletServiceProvider);
-      if (!wallet.connected || wallet.address == null) {
-        throw StateError('Wallet is not connected.');
-      }
-      final chainId = await walletService.currentChainId();
-      if (chainId != 133) {
-        await walletService.switchChain(133);
-      }
-      final prepared = await api.prepareTrade(
-        marketId: item.id,
-        side: side,
-        collateralAmount: size,
-        walletAddress: wallet.address!,
-      );
-      setState(() {
-        pendingTradeId = prepared.tradeId;
-        tradeStatus = 'broadcasting';
-      });
-      final txHash = await walletService.sendTransaction({
-        'from': wallet.address,
-        'to': prepared.tx['to'],
-        'data': prepared.tx['data'],
-        'value': prepared.tx['value'],
-        if (prepared.tx['gas'] != null) 'gas': prepared.tx['gas'],
-        if (prepared.tx['gasPrice'] != null) 'gasPrice': prepared.tx['gasPrice'],
-        if (prepared.tx['nonce'] != null) 'nonce': prepared.tx['nonce'],
-        'chainId': prepared.tx['chainId'],
-      });
-      setState(() {
-        tradeStatus = 'pending_confirmation';
-        pendingTxHash = txHash;
-      });
-      await api.submitTradeHash(tradeId: prepared.tradeId, txHash: txHash, walletAddress: wallet.address);
-    } catch (error) {
-      final message = error.toString();
-      setState(() {
-        tradeStatus = message.contains('USER_REJECTED') || message.contains('rejected')
-            ? 'signing_rejected'
-            : 'failed';
-        tradeError = message;
-      });
-    }
-  }
-
-  Widget _infoTile(String label, String value) {
+  Widget _priceTile({required String label, required String value}) {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: AetherColors.bgPanel,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AetherRadii.md),
         border: Border.all(color: AetherColors.border),
+        color: AetherColors.bgPanel,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: const TextStyle(color: AetherColors.muted)),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
 
-  Widget _countdownChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AetherColors.bgPanel,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AetherColors.border),
+  Widget _riskLine(String key, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(key, style: const TextStyle(color: AetherColors.muted))),
+          Text(value),
+        ],
       ),
-      child: const Text('Expiry: 269d 14h',
-          style: TextStyle(fontWeight: FontWeight.w600)),
     );
+  }
+
+  List<_OrderFlowRow> _orderFlowRows(Market market) {
+    final base = max(market.liquidity / 20, 10000);
+    return [
+      for (var i = 1; i <= 6; i++)
+        _OrderFlowRow(
+          level: 'L$i',
+          bid: base - (i * 1400),
+          ask: base - (i * 1100),
+          imbalance: ((base - (i * 1400)) / (base - (i * 1100))) * 100,
+        ),
+    ];
+  }
+
+  List<_EvidenceRow> _evidenceRows(Market market) {
+    return [
+      _EvidenceRow(
+        id: '${market.id}-a',
+        source: 'ETF Flow Desk',
+        signal: 'Net inflows remain positive for 5 sessions',
+        weight: 0.31,
+        confidence: 0.86,
+        note: 'Cross-validated with custody settlement records.',
+      ),
+      _EvidenceRow(
+        id: '${market.id}-b',
+        source: 'On-chain Monitor',
+        signal: 'Active address count rebounded 12% WoW',
+        weight: 0.24,
+        confidence: 0.79,
+        note: 'Signal is seasonally adjusted for holiday periods.',
+      ),
+      _EvidenceRow(
+        id: '${market.id}-c',
+        source: 'Volatility Surface',
+        signal: 'Front-end skew elevated vs 30-day average',
+        weight: 0.19,
+        confidence: 0.72,
+        note: 'Elevated skew implies wider confidence intervals.',
+      ),
+      _EvidenceRow(
+        id: '${market.id}-d',
+        source: 'Macro Feed',
+        signal: 'USD liquidity impulse turning neutral',
+        weight: 0.14,
+        confidence: 0.68,
+        note: 'Macro data has a known lag and lower intra-day signal quality.',
+      ),
+    ];
   }
 
   String _marketSymbol(String title) {
@@ -519,4 +632,103 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
     if (upper.contains('HASHKEY')) return 'HSK/USD';
     return 'BTC/USD';
   }
+}
+
+class _ProbabilityPainter extends CustomPainter {
+  const _ProbabilityPainter({required this.points});
+
+  final List<double> points;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final backgroundPaint = Paint()
+      ..color = AetherColors.bgPanel
+      ..style = PaintingStyle.fill;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Offset.zero & size,
+        const Radius.circular(AetherRadii.md),
+      ),
+      backgroundPaint,
+    );
+
+    if (points.isEmpty) return;
+    if (points.length == 1) {
+      final y = size.height - (size.height * points.first.clamp(0, 1));
+      final dot = Paint()..color = AetherColors.accent;
+      canvas.drawCircle(Offset(size.width / 2, y), 3, dot);
+      return;
+    }
+
+    final line = Path();
+    for (var i = 0; i < points.length; i++) {
+      final x = (size.width / (points.length - 1)) * i;
+      final y = size.height - (size.height * points[i].clamp(0, 1));
+      if (i == 0) {
+        line.moveTo(x, y);
+      } else {
+        line.lineTo(x, y);
+      }
+    }
+
+    final stroke = Paint()
+      ..color = AetherColors.accent
+      ..strokeWidth = 2.4
+      ..style = PaintingStyle.stroke;
+
+    final fillPath = Path.from(line)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          AetherColors.accent.withValues(alpha: 0.28),
+          AetherColors.accent.withValues(alpha: 0.04),
+        ],
+      ).createShader(Offset.zero & size);
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(line, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ProbabilityPainter oldDelegate) {
+    return oldDelegate.points != points;
+  }
+}
+
+class _OrderFlowRow {
+  const _OrderFlowRow({
+    required this.level,
+    required this.bid,
+    required this.ask,
+    required this.imbalance,
+  });
+
+  final String level;
+  final double bid;
+  final double ask;
+  final double imbalance;
+}
+
+class _EvidenceRow {
+  const _EvidenceRow({
+    required this.id,
+    required this.source,
+    required this.signal,
+    required this.weight,
+    required this.confidence,
+    required this.note,
+  });
+
+  final String id;
+  final String source;
+  final String signal;
+  final double weight;
+  final double confidence;
+  final String note;
 }

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
-import '../../widgets/glass_card.dart';
+import '../../widgets/enterprise/enterprise_components.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -14,84 +15,167 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
-  String category = 'All';
+  String _queueFilter = 'All';
 
   @override
   Widget build(BuildContext context) {
-    final notifications = ref.watch(notificationsProvider);
-    const categories = ['All', 'Market Alerts', 'AI Confidence Alerts', 'Whale Alerts', 'Disputes', 'Payouts', 'Hedge Suggestions'];
+    final notificationsValue = ref.watch(notificationsProvider);
 
     return AppScaffold(
-      title: 'Notification Center',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+      title: 'Alerts',
+      subtitle: 'Prioritized event queue for trading, risk, and operations desks.',
+      child: notificationsValue.when(
+        data: (alerts) {
+          final filtered = _applyQueueFilter(alerts);
+          final critical = alerts
+              .where((item) => item.level.toLowerCase().contains('critical'))
+              .length;
+          final warning = alerts
+              .where((item) => item.level.toLowerCase().contains('warning'))
+              .length;
+
+          return ListView(
             children: [
-              for (final c in categories)
-                ChoiceChip(
-                  selected: category == c,
-                  label: Text(c),
-                  onSelected: (_) => setState(() => category = c),
+              KpiStrip(
+                items: [
+                  KpiStripItem(label: 'Total Alerts', value: alerts.length.toString()),
+                  KpiStripItem(label: 'Critical', value: critical.toString()),
+                  KpiStripItem(label: 'Warning', value: warning.toString()),
+                  KpiStripItem(
+                    label: 'Informational',
+                    value: (alerts.length - critical - warning).toString(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.lg),
+              EnterprisePanel(
+                child: Wrap(
+                  spacing: AetherSpacing.sm,
+                  runSpacing: AetherSpacing.sm,
+                  children: [
+                    for (final item in const [
+                      'All',
+                      'Critical',
+                      'Warning',
+                      'Info',
+                    ])
+                      ChoiceChip(
+                        label: Text(item),
+                        selected: _queueFilter == item,
+                        onSelected: (_) => setState(() => _queueFilter = item),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AetherSpacing.lg),
+              if (filtered.isEmpty)
+                const EmptyStateCard(
+                  icon: Icons.notifications_none,
+                  title: 'No alerts in this queue',
+                  message:
+                      'Current filter has no items. Monitoring remains active and new events will stream automatically.',
+                )
+              else
+                EnterpriseDataTable<AppNotification>(
+                  title: 'Alert Queue',
+                  subtitle: 'Desk actions and acknowledgement states.',
+                  rows: filtered,
+                  rowId: (row) => '${row.level}-${row.message.hashCode}',
+                  searchHint: 'Search alerts',
+                  filters: [
+                    EnterpriseTableFilter(
+                      label: 'Critical',
+                      predicate: (row) =>
+                          row.level.toLowerCase().contains('critical'),
+                    ),
+                    EnterpriseTableFilter(
+                      label: 'Warning',
+                      predicate: (row) => row.level.toLowerCase().contains('warning'),
+                    ),
+                  ],
+                  columns: [
+                    EnterpriseTableColumn(
+                      label: 'Severity',
+                      width: 100,
+                      cell: (row) => row.level,
+                      sortValue: (row) => row.level,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'Message',
+                      width: 420,
+                      cell: (row) => row.message,
+                      sortValue: (row) => row.message,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'Desk',
+                      width: 110,
+                      cell: (row) => row.level.toLowerCase().contains('critical')
+                          ? 'Risk'
+                          : row.level.toLowerCase().contains('warning')
+                              ? 'Trading'
+                              : 'Ops',
+                      sortValue: (row) => row.level,
+                    ),
+                    EnterpriseTableColumn(
+                      label: 'State',
+                      width: 120,
+                      cell: (row) => row.level.toLowerCase().contains('critical')
+                          ? 'Action Required'
+                          : 'Monitoring',
+                      sortValue: (row) => row.level,
+                    ),
+                  ],
+                  expandedBuilder: (row) => Row(
+                    children: [
+                      StatusBadge(
+                        label: row.level,
+                        color: row.level.toLowerCase().contains('critical')
+                            ? AetherColors.critical
+                            : row.level.toLowerCase().contains('warning')
+                                ? AetherColors.warning
+                                : AetherColors.accent,
+                      ),
+                      const SizedBox(width: AetherSpacing.sm),
+                      const Text(
+                        'Escalation policy: notify desk lead after 5 min unresolved state.',
+                        style: TextStyle(color: AetherColors.muted),
+                      ),
+                    ],
+                  ),
                 ),
             ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => EnterprisePanel(
+          title: 'Unable to load alerts',
+          child: Text(
+            error.toString(),
+            style: const TextStyle(color: AetherColors.critical),
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: notifications.when(
-              data: (items) {
-                if (items.isEmpty) {
-                  return const GlassCard(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('No alerts right now. Live monitoring remains active.'),
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, index) {
-                    final alert = items[index];
-                    final level = alert.level.toLowerCase();
-                    final severityColor = level == 'critical'
-                        ? AetherColors.critical
-                        : level == 'warning'
-                            ? AetherColors.warning
-                            : AetherColors.accent;
-                    return GlassCard(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(width: 10, height: 10, margin: const EdgeInsets.only(top: 6), decoration: BoxDecoration(color: severityColor, shape: BoxShape.circle)),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(alert.level.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 6),
-                                Text(alert.message),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text(error.toString())),
-            ),
-          ),
-        ],
+        ),
       ),
     );
+  }
+
+  List<AppNotification> _applyQueueFilter(List<AppNotification> alerts) {
+    switch (_queueFilter) {
+      case 'Critical':
+        return alerts
+            .where((item) => item.level.toLowerCase().contains('critical'))
+            .toList();
+      case 'Warning':
+        return alerts
+            .where((item) => item.level.toLowerCase().contains('warning'))
+            .toList();
+      case 'Info':
+        return alerts
+            .where((item) =>
+                !item.level.toLowerCase().contains('critical') &&
+                !item.level.toLowerCase().contains('warning'))
+            .toList();
+      default:
+        return alerts;
+    }
   }
 }
