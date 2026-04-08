@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class SplashScreen extends StatefulWidget {
+import '../../core/providers.dart';
+
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted) context.go('/login');
-    });
+    _restoreAndRoute();
+  }
+
+  Future<void> _restoreAndRoute() async {
+    await ref.read(authSessionProvider.notifier).restore();
+    final authenticated = ref.read(authSessionProvider).isAuthenticated;
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    context.go(authenticated ? '/dashboard' : '/login');
   }
 
   @override

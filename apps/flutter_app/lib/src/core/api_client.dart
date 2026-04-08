@@ -8,7 +8,14 @@ import 'constants.dart';
 import 'models.dart';
 
 class ApiClient {
-  const ApiClient();
+  const ApiClient({
+    String? Function()? readAccessToken,
+    Future<bool> Function()? refreshAccessToken,
+  })  : _readAccessToken = readAccessToken,
+        _refreshAccessToken = refreshAccessToken;
+
+  final String? Function()? _readAccessToken;
+  final Future<bool> Function()? _refreshAccessToken;
 
   Future<Map<String, dynamic>> login({
     required String email,
@@ -216,9 +223,8 @@ class ApiClient {
   }
 
   Future<List<CopiedTradeModel>> fetchCopiedTrades() async {
-    final response = await _get('/copy-trading/copied-trades');
-    final payload =
-        _decodeList(response, endpoint: '/copy-trading/copied-trades');
+    final response = await _get('/copy-trading/trades');
+    final payload = _decodeList(response, endpoint: '/copy-trading/trades');
     return payload
         .map((item) => CopiedTradeModel.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -404,34 +410,60 @@ class ApiClient {
 
   Future<http.Response> _get(String endpoint) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
-    try {
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-      _ensureSuccess(response, endpoint: endpoint);
-      return response;
-    } on TimeoutException {
-      throw ApiException('Request timed out for $endpoint');
-    } on http.ClientException catch (error) {
-      throw ApiException('Network error on $endpoint: $error');
-    } on FormatException {
-      throw ApiException('Malformed URL for endpoint $endpoint');
-    } on ApiException {
-      rethrow;
-    } catch (error) {
-      throw ApiException('Unexpected request failure on $endpoint: $error');
-    }
+    return _requestWithRetry(
+      endpoint: endpoint,
+      send: (headers) => http.get(uri, headers: headers),
+    );
   }
 
   Future<http.Response> _post(
       String endpoint, Map<String, dynamic> body) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
+    return _requestWithRetry(
+      endpoint: endpoint,
+      includeJsonContentType: true,
+      send: (headers) => http.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(body),
+      ),
+    );
+  }
+
+  Future<http.Response> _patch(
+      String endpoint, Map<String, dynamic> body) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
+    return _requestWithRetry(
+      endpoint: endpoint,
+      includeJsonContentType: true,
+      send: (headers) => http.patch(
+        uri,
+        headers: headers,
+        body: jsonEncode(body),
+      ),
+    );
+  }
+
+  Future<http.Response> _requestWithRetry({
+    required String endpoint,
+    required Future<http.Response> Function(Map<String, String> headers) send,
+    bool includeJsonContentType = false,
+  }) async {
     try {
-      final response = await http
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 10));
+      var response = await send(_headers(
+        includeJsonContentType: includeJsonContentType,
+      )).timeout(const Duration(seconds: 10));
+      final refreshAccessToken = _refreshAccessToken;
+      if (response.statusCode == 401 &&
+          refreshAccessToken != null &&
+          !endpoint.startsWith('/auth/')) {
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          response = await send(_headers(
+            includeJsonContentType: includeJsonContentType,
+          )).timeout(const Duration(seconds: 10));
+        }
+      }
       _ensureSuccess(response, endpoint: endpoint);
       return response;
     } on TimeoutException {
@@ -447,30 +479,16 @@ class ApiClient {
     }
   }
 
-  Future<http.Response> _patch(
-      String endpoint, Map<String, dynamic> body) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
-    try {
-      final response = await http
-          .patch(
-            uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 10));
-      _ensureSuccess(response, endpoint: endpoint);
-      return response;
-    } on TimeoutException {
-      throw ApiException('Request timed out for $endpoint');
-    } on http.ClientException catch (error) {
-      throw ApiException('Network error on $endpoint: $error');
-    } on FormatException {
-      throw ApiException('Malformed URL for endpoint $endpoint');
-    } on ApiException {
-      rethrow;
-    } catch (error) {
-      throw ApiException('Unexpected request failure on $endpoint: $error');
+  Map<String, String> _headers({bool includeJsonContentType = false}) {
+    final headers = <String, String>{};
+    if (includeJsonContentType) {
+      headers['Content-Type'] = 'application/json';
     }
+    final token = _readAccessToken?.call();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
   }
 
   void _ensureSuccess(http.Response response, {required String endpoint}) {

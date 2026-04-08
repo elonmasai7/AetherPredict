@@ -44,7 +44,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(apiClientProvider).login(email: email, password: password);
+      final authPayload = await ref
+          .read(apiClientProvider)
+          .login(email: email, password: password);
+      final accessToken = authPayload['access_token']?.toString();
+      final refreshToken = authPayload['refresh_token']?.toString();
+      final tokenType = authPayload['token_type']?.toString() ?? 'bearer';
+      if (accessToken == null ||
+          accessToken.isEmpty ||
+          refreshToken == null ||
+          refreshToken.isEmpty) {
+        throw StateError('Authentication response did not include tokens.');
+      }
+      await ref.read(authSessionProvider.notifier).saveTokens(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            tokenType: tokenType,
+          );
       if (!mounted) return;
       context.go('/dashboard');
     } catch (error) {
@@ -60,6 +76,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final wallet = ref.watch(walletSessionProvider);
+    final auth = ref.watch(authSessionProvider);
+    ref.read(authSessionProvider.notifier).restore();
+    if (auth.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.go('/dashboard');
+        }
+      });
+    }
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(

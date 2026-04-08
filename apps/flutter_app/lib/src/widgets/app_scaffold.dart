@@ -57,6 +57,7 @@ class AppScaffold extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final wallet = ref.watch(walletSessionProvider);
     final portfolio = ref.watch(portfolioProvider);
+    ref.read(authSessionProvider.notifier).restore();
     ref.read(walletSessionProvider.notifier).restore();
     ref.listen(txUpdatesProvider, (previous, next) {
       next.whenData((update) {
@@ -128,7 +129,7 @@ class AppScaffold extends ConsumerWidget {
                               title: title,
                               compact: compact,
                               portfolioSummary:
-                                  '${portfolioSummary} • ${wallet.activePositions} active',
+                                  '$portfolioSummary • ${wallet.activePositions} active',
                               walletLabel: walletLabel,
                               walletType: wallet.type,
                               connected: wallet.connected,
@@ -138,6 +139,13 @@ class AppScaffold extends ConsumerWidget {
                               onDisconnect: () => ref
                                   .read(walletSessionProvider.notifier)
                                   .disconnect(),
+                              onLogout: () {
+                                ref.read(authSessionProvider.notifier).clear();
+                                ref
+                                    .read(walletSessionProvider.notifier)
+                                    .disconnect();
+                                context.go('/login');
+                              },
                             ),
                             const SizedBox(height: 20),
                             Expanded(child: child),
@@ -253,6 +261,7 @@ class _TopHeader extends StatelessWidget {
     required this.connected,
     required this.onConnect,
     required this.onDisconnect,
+    required this.onLogout,
   });
 
   final String title;
@@ -263,6 +272,7 @@ class _TopHeader extends StatelessWidget {
   final bool connected;
   final ValueChanged<WalletType> onConnect;
   final VoidCallback onDisconnect;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -283,7 +293,7 @@ class _TopHeader extends StatelessWidget {
             ],
           ),
         ),
-        _HeaderChip(
+        const _HeaderChip(
             icon: Icons.health_and_safety_outlined,
             label: 'System Healthy',
             accent: AetherColors.success),
@@ -344,8 +354,8 @@ class _TopHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AetherColors.border),
             ),
-            child: Row(
-              children: const [
+            child: const Row(
+              children: [
                 Icon(Icons.account_balance_wallet_outlined,
                     size: 16, color: AetherColors.muted),
                 SizedBox(width: 8),
@@ -367,6 +377,10 @@ class _TopHeader extends StatelessWidget {
           onSelected: (value) {
             if (value == 'settings') {
               context.go('/settings');
+              return;
+            }
+            if (value == 'logout') {
+              onLogout();
             }
           },
           itemBuilder: (_) => const [

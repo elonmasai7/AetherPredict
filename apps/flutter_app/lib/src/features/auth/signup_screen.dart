@@ -57,10 +57,24 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     });
 
     try {
-      await ref.read(apiClientProvider).register(
+      final authPayload = await ref.read(apiClientProvider).register(
             email: email,
             password: password,
             displayName: displayName.isEmpty ? null : displayName,
+          );
+      final accessToken = authPayload['access_token']?.toString();
+      final refreshToken = authPayload['refresh_token']?.toString();
+      final tokenType = authPayload['token_type']?.toString() ?? 'bearer';
+      if (accessToken == null ||
+          accessToken.isEmpty ||
+          refreshToken == null ||
+          refreshToken.isEmpty) {
+        throw StateError('Authentication response did not include tokens.');
+      }
+      await ref.read(authSessionProvider.notifier).saveTokens(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            tokenType: tokenType,
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,6 +93,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authSessionProvider);
+    ref.read(authSessionProvider.notifier).restore();
+    if (auth.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.go('/dashboard');
+        }
+      });
+    }
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
