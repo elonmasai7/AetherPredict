@@ -3,38 +3,51 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
-import '../../core/wallet_service.dart';
 import '../../widgets/glass_card.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class SignUpScreen extends ConsumerStatefulWidget {
+  const SignUpScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _SignUpScreenState extends ConsumerState<SignUpScreen> {
+  final _displayNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   bool _submitting = false;
   String? _error;
 
   @override
   void dispose() {
+    _displayNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (_submitting) return;
 
+    final displayName = _displayNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       setState(() => _error = 'Email and password are required.');
+      return;
+    }
+    if (password.length < 8) {
+      setState(() => _error = 'Use at least 8 characters for password.');
+      return;
+    }
+    if (password != confirmPassword) {
+      setState(() => _error = 'Passwords do not match.');
       return;
     }
 
@@ -44,8 +57,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(apiClientProvider).login(email: email, password: password);
+      await ref.read(apiClientProvider).register(
+            email: email,
+            password: password,
+            displayName: displayName.isEmpty ? null : displayName,
+          );
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account created successfully.')),
+      );
       context.go('/dashboard');
     } catch (error) {
       if (!mounted) return;
@@ -59,7 +79,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final wallet = ref.watch(walletSessionProvider);
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -71,22 +90,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
+            constraints: const BoxConstraints(maxWidth: 560),
             child: GlassCard(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Institutional prediction intelligence',
-                      style:
-                          TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 12),
+                  const Text(
+                    'Create your AetherPredict account',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
                   Text(
-                    'Trade on-chain probabilities with AI-driven confidence, dispute intelligence, and autonomous liquidity support.',
+                    'Sign up to start tracking markets, vaults, and AI signals.',
                     style:
                         TextStyle(color: Colors.white.withValues(alpha: 0.72)),
                   ),
                   const SizedBox(height: 24),
+                  TextField(
+                    controller: _displayNameController,
+                    decoration: const InputDecoration(
+                        labelText: 'Display name (optional)'),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -98,6 +124,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     obscureText: true,
                     decoration: const InputDecoration(labelText: 'Password'),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    decoration:
+                        const InputDecoration(labelText: 'Confirm password'),
+                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(_error!,
@@ -108,39 +141,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: _submitting ? null : _submit,
-                      child: Text(_submitting ? 'Signing in...' : 'Sign in'),
+                      child:
+                          Text(_submitting ? 'Creating account...' : 'Sign up'),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton(
                       onPressed:
-                          _submitting ? null : () => context.go('/signup'),
-                      child: const Text('Create account'),
+                          _submitting ? null : () => context.go('/login'),
+                      child: const Text('Back to sign in'),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: _submitting
-                        ? null
-                        : () async {
-                            await ref
-                                .read(walletSessionProvider.notifier)
-                                .connect(WalletType.walletConnect);
-                            if (context.mounted) {
-                              context.go('/dashboard');
-                            }
-                          },
-                    child: Text(wallet.connected
-                        ? 'Wallet Connected'
-                        : 'Connect Wallet'),
-                  ),
-                  if (wallet.error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(wallet.error!,
-                        style: const TextStyle(color: Colors.redAccent)),
-                  ],
                 ],
               ),
             ),

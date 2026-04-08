@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:walletconnect_flutter_v2/walletconnect_flutter_v2.dart';
 
 import 'constants.dart';
@@ -56,7 +58,8 @@ class WalletService {
     );
     final session = await connection.session.future;
     _session = session;
-    final account = session.namespaces['eip155']?.accounts.firstOrNull;
+    final accounts = session.namespaces['eip155']?.accounts;
+    final account = accounts != null && accounts.isNotEmpty ? accounts.first : null;
     if (account == null) {
       throw StateError('Wallet connected without an account address.');
     }
@@ -77,13 +80,29 @@ class WalletService {
     if (app == null) {
       return const Stream.empty();
     }
-    return app.onSessionEvent;
+    late final EventHandler<SessionEvent> handler;
+    late final StreamController<SessionEvent> controller;
+    controller = StreamController<SessionEvent>.broadcast(
+      onListen: () {
+        handler = (event) {
+          if (event != null) {
+            controller.add(event);
+          }
+        };
+        app.onSessionEvent.subscribe(handler);
+      },
+      onCancel: () {
+        app.onSessionEvent.unsubscribe(handler);
+      },
+    );
+    return controller.stream;
   }
 
   Future<int?> currentChainId() async {
     final session = _session ?? currentSession();
     if (session == null) return null;
-    final chain = session.namespaces['eip155']?.chains.firstOrNull;
+    final chains = session.namespaces['eip155']?.chains;
+    final chain = chains != null && chains.isNotEmpty ? chains.first : null;
     if (chain == null) return null;
     final parts = chain.split(':');
     return parts.length == 2 ? int.tryParse(parts[1]) : null;
@@ -144,8 +163,4 @@ class WalletService {
     );
     return result as String;
   }
-}
-
-extension _FirstOrNullExt<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

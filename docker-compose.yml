@@ -19,10 +19,18 @@ services:
 
   backend:
     build:
-      context: ./apps/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/backend/Dockerfile
     env_file:
       - .env.example
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/aetherpredict
+      REDIS_URL: redis://redis:6379/0
+      HASHKEY_RPC_FALLBACKS: "[]"
+      VAULT_AUTO_EXECUTE_DEFAULT_SLUGS: "[]"
+      VAULT_AUTO_EXECUTE_ALLOWLIST_IDS: "[]"
+      VAULT_AUTO_EXECUTE_ALLOWLIST_MANAGER_ROLES: "[]"
     ports:
       - "8000:8000"
     depends_on:

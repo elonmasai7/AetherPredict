@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/agents/agents_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/signup_screen.dart';
 import '../features/bundles/bundle_marketplace_screen.dart';
 import '../features/copilot/copilot_screen.dart';
 import '../features/copy_trading/copy_trading_screen.dart';
@@ -30,25 +31,39 @@ final appRouter = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+    GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
     GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
     GoRoute(path: '/markets', builder: (_, __) => const MarketListScreen()),
-    GoRoute(path: '/markets/detail', builder: (_, __) => const MarketDetailScreen()),
+    GoRoute(
+        path: '/markets/detail',
+        builder: (_, __) => const MarketDetailScreen()),
     GoRoute(path: '/trade', builder: (_, __) => const TradeScreen()),
     GoRoute(path: '/portfolio', builder: (_, __) => const PortfolioScreen()),
     GoRoute(path: '/risk', builder: (_, __) => const RiskDashboardScreen()),
     GoRoute(path: '/copilot', builder: (_, __) => const CopilotScreen()),
     GoRoute(path: '/agents', builder: (_, __) => const AgentsScreen()),
-    GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
-    GoRoute(path: '/leaderboard', builder: (_, __) => const LeaderboardScreen()),
-    GoRoute(path: '/research', builder: (_, __) => const ResearchWorkspaceScreen()),
+    GoRoute(
+        path: '/notifications',
+        builder: (_, __) => const NotificationsScreen()),
+    GoRoute(
+        path: '/leaderboard', builder: (_, __) => const LeaderboardScreen()),
+    GoRoute(
+        path: '/research', builder: (_, __) => const ResearchWorkspaceScreen()),
     GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
-    GoRoute(path: '/operations', builder: (_, __) => const OperationsConsoleScreen()),
+    GoRoute(
+        path: '/operations',
+        builder: (_, __) => const OperationsConsoleScreen()),
     GoRoute(path: '/status', builder: (_, __) => const StatusCenterScreen()),
-    GoRoute(path: '/bundles', builder: (_, __) => const BundleMarketplaceScreen()),
-    GoRoute(path: '/vaults', builder: (_, __) => const VaultMarketplaceScreen()),
-    GoRoute(path: '/vaults/detail', builder: (_, __) => const VaultDetailScreen()),
-    GoRoute(path: '/copy-trading', builder: (_, __) => const CopyTradingScreen()),
-    GoRoute(path: '/insurance', builder: (_, __) => const InsuranceCenterScreen()),
+    GoRoute(
+        path: '/bundles', builder: (_, __) => const BundleMarketplaceScreen()),
+    GoRoute(
+        path: '/vaults', builder: (_, __) => const VaultMarketplaceScreen()),
+    GoRoute(
+        path: '/vaults/detail', builder: (_, __) => const VaultDetailScreen()),
+    GoRoute(
+        path: '/copy-trading', builder: (_, __) => const CopyTradingScreen()),
+    GoRoute(
+        path: '/insurance', builder: (_, __) => const InsuranceCenterScreen()),
     GoRoute(path: '/discussion', builder: (_, __) => const DiscussionScreen()),
     GoRoute(path: '/disputes', builder: (_, __) => const DisputeCenterScreen()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),

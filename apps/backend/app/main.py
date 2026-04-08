@@ -1,8 +1,9 @@
 import asyncio
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
@@ -121,6 +122,30 @@ def health():
     return {"status": "ok", "service": "backend", "version": "0.2.0"}
 
 
-frontend_dist = Path(__file__).resolve().parents[2] / "flutter_app" / "build" / "web"
-if frontend_dist.exists():
+def _resolve_frontend_dist() -> Path | None:
+    base = Path(__file__).resolve()
+    candidates = (
+        # Docker image layout: /app/app/main.py -> /app/flutter_app/build/web
+        base.parents[1] / "flutter_app" / "build" / "web",
+        # Local repo layout: .../apps/backend/app/main.py -> .../apps/flutter_app/build/web
+        base.parents[2] / "flutter_app" / "build" / "web",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+@app.get("/favicon.ico")
+def favicon():
+    if frontend_dist is None:
+        raise HTTPException(status_code=404)
+    favicon_path = frontend_dist / "favicon.png"
+    if favicon_path.exists():
+        return FileResponse(favicon_path)
+    raise HTTPException(status_code=404)
+
+
+frontend_dist = _resolve_frontend_dist()
+if frontend_dist is not None:
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
