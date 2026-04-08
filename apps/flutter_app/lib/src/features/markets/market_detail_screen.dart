@@ -188,9 +188,9 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
   Widget _centerZone(
     Market market,
     AsyncValue<SentimentFeed> sentimentValue,
-    AsyncValue<CopilotRecommendation> copilotValue,
-    {required bool compact},
-  ) {
+    AsyncValue<CopilotRecommendation> copilotValue, {
+    required bool compact,
+  }) {
     return Column(
       children: [
         EnterprisePanel(
@@ -517,7 +517,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _riskLine('Max position notional', '$150,000'),
+              _riskLine('Max position notional', '\$150,000'),
               _riskLine('Current desk utilization', '64%'),
               _riskLine('Slippage guardrail', '80 bps'),
               _riskLine('Auto-hedge policy', 'Enabled'),

@@ -112,7 +112,7 @@ class _MarketListScreenState extends ConsumerState<MarketListScreen> {
                       predicate: (row) => row.aiConfidence >= 0.75,
                     ),
                     EnterpriseTableFilter(
-                      label: 'Volume > $1M',
+                      label: 'Volume > \$1M',
                       predicate: (row) => row.volume >= 1000000,
                     ),
                     EnterpriseTableFilter(

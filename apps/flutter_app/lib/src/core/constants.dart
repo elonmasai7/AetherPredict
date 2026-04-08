@@ -11,10 +11,8 @@ class AppConfig {
     const configured = String.fromEnvironment('API_BASE_URL', defaultValue: '');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb) {
-      final base = Uri.base;
-      final host = base.host;
-      final port = base.hasPort ? ':${base.port}' : '';
-      return '${base.scheme}://$host$port';
+      final origin = _webBackendOrigin();
+      return '${origin.scheme}://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}';
     }
     return 'http://localhost:8000';
   }
@@ -23,11 +21,9 @@ class AppConfig {
     const configured = String.fromEnvironment('WS_MARKETS_URL', defaultValue: '');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb) {
-      final base = Uri.base;
-      final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-      final host = base.host;
-      final port = base.hasPort ? ':${base.port}' : '';
-      return '$scheme://$host$port/ws/markets';
+      final origin = _webBackendOrigin();
+      final scheme = origin.scheme == 'https' ? 'wss' : 'ws';
+      return '$scheme://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}/ws/markets';
     }
     return 'ws://localhost:8000/ws/markets';
   }
@@ -36,11 +32,9 @@ class AppConfig {
     const configured = String.fromEnvironment('WS_TX_URL', defaultValue: '');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb) {
-      final base = Uri.base;
-      final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-      final host = base.host;
-      final port = base.hasPort ? ':${base.port}' : '';
-      return '$scheme://$host$port/ws/tx';
+      final origin = _webBackendOrigin();
+      final scheme = origin.scheme == 'https' ? 'wss' : 'ws';
+      return '$scheme://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}/ws/tx';
     }
     return 'ws://localhost:8000/ws/tx';
   }
@@ -49,11 +43,9 @@ class AppConfig {
     const configured = String.fromEnvironment('WS_VAULTS_URL', defaultValue: '');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb) {
-      final base = Uri.base;
-      final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-      final host = base.host;
-      final port = base.hasPort ? ':${base.port}' : '';
-      return '$scheme://$host$port/ws/vaults';
+      final origin = _webBackendOrigin();
+      final scheme = origin.scheme == 'https' ? 'wss' : 'ws';
+      return '$scheme://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}/ws/vaults';
     }
     return 'ws://localhost:8000/ws/vaults';
   }
@@ -62,12 +54,36 @@ class AppConfig {
     const configured = String.fromEnvironment('WS_COPY_URL', defaultValue: '');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb) {
-      final base = Uri.base;
-      final scheme = base.scheme == 'https' ? 'wss' : 'ws';
-      final host = base.host;
-      final port = base.hasPort ? ':${base.port}' : '';
-      return '$scheme://$host$port/ws/copy';
+      final origin = _webBackendOrigin();
+      final scheme = origin.scheme == 'https' ? 'wss' : 'ws';
+      return '$scheme://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}/ws/copy';
     }
     return 'ws://localhost:8000/ws/copy';
+  }
+
+  static Uri _webBackendOrigin() {
+    final base = Uri.base;
+    final isLocalHost = base.host == 'localhost' || base.host == '127.0.0.1';
+
+    // Local dev default: Flutter web server on :8080, backend on :8000.
+    if (isLocalHost && base.port == 8080) {
+      return Uri(
+        scheme: base.scheme,
+        host: base.host,
+        port: 8000,
+      );
+    }
+
+    if (base.hasPort) {
+      return Uri(
+        scheme: base.scheme,
+        host: base.host,
+        port: base.port,
+      );
+    }
+    return Uri(
+      scheme: base.scheme,
+      host: base.host,
+    );
   }
 }
