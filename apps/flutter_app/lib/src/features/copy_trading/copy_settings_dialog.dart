@@ -31,9 +31,12 @@ class _CopySettingsDialogState extends State<CopySettingsDialog> {
   @override
   void initState() {
     super.initState();
-    allocation = TextEditingController(text: widget.initialAllocation.toStringAsFixed(2));
-    maxLoss = TextEditingController(text: widget.initialMaxLoss.toStringAsFixed(2));
-    autoStop = TextEditingController(text: widget.initialAutoStop.toStringAsFixed(2));
+    allocation = TextEditingController(
+        text: widget.initialAllocation.toStringAsFixed(2));
+    maxLoss =
+        TextEditingController(text: widget.initialMaxLoss.toStringAsFixed(2));
+    autoStop =
+        TextEditingController(text: widget.initialAutoStop.toStringAsFixed(2));
     riskLevel = widget.initialRisk;
   }
 
@@ -49,12 +52,13 @@ class _CopySettingsDialogState extends State<CopySettingsDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AetherColors.bgElevated,
-      title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+      title: Text(widget.title,
+          style: const TextStyle(fontWeight: FontWeight.w700)),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Allocation % of balance'),
+            const Text('Allocation % of forecast balance'),
             const SizedBox(height: 6),
             TextField(
               controller: allocation,
@@ -62,7 +66,7 @@ class _CopySettingsDialogState extends State<CopySettingsDialog> {
               decoration: const InputDecoration(hintText: '0.20'),
             ),
             const SizedBox(height: 12),
-            const Text('Max loss %'),
+            const Text('Max forecast loss %'),
             const SizedBox(height: 6),
             TextField(
               controller: maxLoss,
@@ -70,7 +74,7 @@ class _CopySettingsDialogState extends State<CopySettingsDialog> {
               decoration: const InputDecoration(hintText: '0.08'),
             ),
             const SizedBox(height: 12),
-            const Text('Auto stop threshold'),
+            const Text('Auto close threshold'),
             const SizedBox(height: 6),
             TextField(
               controller: autoStop,
@@ -85,19 +89,26 @@ class _CopySettingsDialogState extends State<CopySettingsDialog> {
                 DropdownMenuItem(value: 'MEDIUM', child: Text('Medium Risk')),
                 DropdownMenuItem(value: 'HIGH', child: Text('High Risk')),
               ],
-              onChanged: (value) => setState(() => riskLevel = value ?? 'MEDIUM'),
-              decoration: const InputDecoration(labelText: 'Risk Level'),
+              onChanged: (value) =>
+                  setState(() => riskLevel = value ?? 'MEDIUM'),
+              decoration:
+                  const InputDecoration(labelText: 'Risk Intelligence Level'),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
         FilledButton(
           onPressed: () {
-            final allocationValue = double.tryParse(allocation.text) ?? widget.initialAllocation;
-            final maxLossValue = double.tryParse(maxLoss.text) ?? widget.initialMaxLoss;
-            final autoStopValue = double.tryParse(autoStop.text) ?? widget.initialAutoStop;
+            final allocationValue =
+                double.tryParse(allocation.text) ?? widget.initialAllocation;
+            final maxLossValue =
+                double.tryParse(maxLoss.text) ?? widget.initialMaxLoss;
+            final autoStopValue =
+                double.tryParse(autoStop.text) ?? widget.initialAutoStop;
             Navigator.pop(context, {
               'allocation_pct': allocationValue,
               'max_loss_pct': maxLossValue,

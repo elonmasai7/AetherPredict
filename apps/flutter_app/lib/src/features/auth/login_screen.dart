@@ -44,8 +44,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      final authPayload =
-          await ref.read(apiClientProvider).login(email: email, password: password);
+      final authPayload = await ref
+          .read(apiClientProvider)
+          .login(email: email, password: password);
       final accessToken = authPayload['access_token']?.toString();
       final refreshToken = authPayload['refresh_token']?.toString();
       final tokenType = authPayload['token_type']?.toString() ?? 'bearer';
@@ -63,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
 
       if (!mounted) return;
-      context.go('/overview');
+      context.go('/forecast-overview');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -82,9 +83,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(walletSessionProvider.notifier).connect(WalletType.walletConnect);
+      await ref
+          .read(walletSessionProvider.notifier)
+          .connect(WalletType.walletConnect);
       if (!mounted) return;
-      context.go('/overview');
+      context.go('/forecast-overview');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -105,33 +108,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (auth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
-          context.go('/overview');
+          context.go('/forecast-overview');
         }
       });
     }
 
     final infoPanel = EnterprisePanel(
       title: 'AetherPredict',
-      subtitle: 'Institutional Financial Intelligence Platform',
+      subtitle: 'AI-powered on-chain prediction intelligence infrastructure',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
           Text(
-            'Unified markets, risk, vault, and operations workflows for professional trading teams.',
+            'AetherPredict is an AI-powered on-chain prediction market on HashKey Chain that uses autonomous agents, smart liquidity, and AI-based resolution to deliver secure, real-time forecasting, trading, and risk intelligence for DeFi and financial markets.',
           ),
           SizedBox(height: AetherSpacing.md),
-          Text('• Workflow-native navigation and operational data density'),
+          Text(
+              '• Event-native forecasting workflows and probability intelligence'),
           SizedBox(height: 6),
-          Text('• Structured tables, audit trails, and report pipelines'),
+          Text(
+              '• AI confidence modeling, evidence timelines, and dispute-aware resolution'),
           SizedBox(height: 6),
-          Text('• Wallet-integrated execution and settlement tracking'),
+          Text(
+              '• Wallet-integrated on-chain settlement and institutional risk controls'),
         ],
       ),
     );
 
     final formPanel = EnterprisePanel(
       title: 'Sign In',
-      subtitle: 'Access your institutional workspace.',
+      subtitle: 'Access your institutional prediction workspace.',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

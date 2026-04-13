@@ -12,7 +12,7 @@ class CopilotScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final copilot = ref.watch(copilotProvider);
     return AppScaffold(
-      title: 'Aether Copilot',
+      title: 'AI Forecast Engine',
       child: copilot.when(
         data: (item) => ListView(
           children: [
@@ -20,12 +20,14 @@ class CopilotScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Trade Recommendation', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const Text('Forecast Recommendation',
+                      style:
+                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   Text('Action: ${item.action}'),
                   Text('Confidence: ${item.confidence}%'),
                   Text('Risk: ${item.risk}'),
-                  Text('Position Size: ${item.positionSize}'),
+                  Text('Open Position Size: ${item.positionSize}'),
                   const SizedBox(height: 12),
                   Text(item.reasoning),
                 ],

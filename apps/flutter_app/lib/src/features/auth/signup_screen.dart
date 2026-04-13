@@ -80,7 +80,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           );
 
       if (!mounted) return;
-      context.go('/overview');
+      context.go('/forecast-overview');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -100,7 +100,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (auth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
-          context.go('/overview');
+          context.go('/forecast-overview');
         }
       });
     }
@@ -115,14 +115,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               constraints: const BoxConstraints(maxWidth: 540),
               child: EnterprisePanel(
                 title: 'Create Account',
-                subtitle: 'Provision access for the institutional trading workspace.',
+                subtitle:
+                    'Provision access for the institutional prediction intelligence workspace.',
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
                       controller: _displayNameController,
-                      decoration:
-                          const InputDecoration(labelText: 'Display Name (Optional)'),
+                      decoration: const InputDecoration(
+                          labelText: 'Display Name (Optional)'),
                     ),
                     const SizedBox(height: AetherSpacing.sm),
                     TextField(
@@ -139,7 +140,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     const SizedBox(height: AetherSpacing.sm),
                     TextField(
                       controller: _confirmPasswordController,
-                      decoration: const InputDecoration(labelText: 'Confirm Password'),
+                      decoration:
+                          const InputDecoration(labelText: 'Confirm Password'),
                       obscureText: true,
                     ),
                     if (_error != null) ...[
@@ -158,7 +160,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       child: FilledButton(
                         onPressed: _submitting ? null : _submit,
                         child: Text(
-                          _submitting ? 'Creating account...' : 'Create Account',
+                          _submitting
+                              ? 'Creating account...'
+                              : 'Create Account',
                         ),
                       ),
                     ),
@@ -166,7 +170,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton(
-                        onPressed: _submitting ? null : () => context.go('/login'),
+                        onPressed:
+                            _submitting ? null : () => context.go('/login'),
                         child: const Text('Back to Sign In'),
                       ),
                     ),

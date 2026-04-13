@@ -11,7 +11,8 @@ class OperationsConsoleScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Operations',
-      subtitle: 'Institutional operations center for reliability, audits, and treasury governance.',
+      subtitle:
+          'Institutional operations center for forecast reliability, resolution governance, and protocol auditability.',
       child: DefaultTabController(
         length: 7,
         child: Column(
@@ -49,7 +50,7 @@ class OperationsConsoleScreen extends StatelessWidget {
                 Tab(text: 'System Status'),
                 Tab(text: 'Incident Logs'),
                 Tab(text: 'AI Model Health'),
-                Tab(text: 'Trade Audit Trail'),
+                Tab(text: 'Forecast Audit Trail'),
                 Tab(text: 'Dispute Queue'),
                 Tab(text: 'Wallet Activity'),
                 Tab(text: 'Protocol Treasury'),
@@ -87,7 +88,7 @@ class _SystemStatusTab extends StatelessWidget {
       rows: const [
         _SystemStatusRow('API Gateway', '99.99%', '142 ms', 'Healthy'),
         _SystemStatusRow('Oracle Mesh', '99.97%', '186 ms', 'Healthy'),
-        _SystemStatusRow('Settlement Engine', '99.92%', '302 ms', 'Watch'),
+        _SystemStatusRow('Resolution Engine', '99.92%', '302 ms', 'Watch'),
         _SystemStatusRow('WebSocket Streams', '99.96%', '88 ms', 'Healthy'),
         _SystemStatusRow('Risk Engine', '99.94%', '214 ms', 'Healthy'),
       ],
@@ -140,9 +141,12 @@ class _IncidentLogTab extends StatelessWidget {
       title: 'Incident Logs',
       subtitle: 'Incident lifecycle tracking with SLA ownership.',
       rows: const [
-        _IncidentRow('INC-8821', '2026-04-08T11:10:00Z', 'Oracle drift alert', 'Open', 'Ops'),
-        _IncidentRow('INC-8819', '2026-04-08T09:45:00Z', 'Settlement delay', 'Resolved', 'Protocol'),
-        _IncidentRow('INC-8812', '2026-04-07T21:20:00Z', 'Risk engine retry spike', 'Resolved', 'Risk'),
+        _IncidentRow('INC-8821', '2026-04-08T11:10:00Z', 'Oracle drift alert',
+            'Open', 'Ops'),
+        _IncidentRow('INC-8819', '2026-04-08T09:45:00Z',
+            'Resolution settlement delay', 'Resolved', 'Protocol'),
+        _IncidentRow('INC-8812', '2026-04-07T21:20:00Z',
+            'Risk engine retry spike', 'Resolved', 'Risk'),
       ],
       rowId: (row) => row.id,
       searchHint: 'Search incident id or summary',
@@ -247,15 +251,15 @@ class _TradeAuditTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return EnterpriseDataTable<_TradeAuditRow>(
-      title: 'Trade Audit Trail',
-      subtitle: 'Execution and settlement chain-of-custody records.',
+      title: 'Forecast Audit Trail',
+      subtitle: 'Position execution and settlement chain-of-custody records.',
       rows: const [
-        _TradeAuditRow('TR-7129', 'BTC > 120k', 'Settled', '0x91ac...44f2'),
-        _TradeAuditRow('TR-7126', 'ETH ETF volume', 'Settled', '0x84ba...91cc'),
-        _TradeAuditRow('TR-7111', 'SOL APR', 'Pending', '0x12fa...21ac'),
+        _TradeAuditRow('FC-7129', 'BTC > 120k', 'Settled', '0x91ac...44f2'),
+        _TradeAuditRow('FC-7126', 'ETH ETF volume', 'Settled', '0x84ba...91cc'),
+        _TradeAuditRow('FC-7111', 'SOL APR', 'Pending', '0x12fa...21ac'),
       ],
       rowId: (row) => row.id,
-      searchHint: 'Search trade id or market',
+      searchHint: 'Search forecast id or market',
       filters: [
         EnterpriseTableFilter(
           label: 'Pending',
@@ -264,7 +268,7 @@ class _TradeAuditTab extends StatelessWidget {
       ],
       columns: [
         EnterpriseTableColumn(
-          label: 'Trade ID',
+          label: 'Forecast ID',
           width: 100,
           cell: (row) => row.id,
           sortValue: (row) => row.id,
@@ -350,11 +354,12 @@ class _WalletActivityTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return EnterpriseDataTable<_WalletActivityRow>(
       title: 'Wallet Activity',
-      subtitle: 'Address-level transaction telemetry and risk posture flags.',
+      subtitle: 'Address-level settlement telemetry and risk posture flags.',
       rows: const [
         _WalletActivityRow('0x1f...a11d', 'Deposit', '\$200,000', 'Normal'),
         _WalletActivityRow('0x8a...02bc', 'Withdrawal', '\$48,000', 'Review'),
-        _WalletActivityRow('0xc1...ef54', 'Trade Settlement', '\$120,000', 'Normal'),
+        _WalletActivityRow(
+            '0xc1...ef54', 'Forecast Settlement', '\$120,000', 'Normal'),
       ],
       rowId: (row) => row.address,
       searchHint: 'Search wallet address',
@@ -406,7 +411,8 @@ class _TreasuryTab extends StatelessWidget {
       rows: const [
         _TreasuryRow('USDC Reserves', '\$4,200,000', 'Core Liquidity'),
         _TreasuryRow('Insurance Buffer', '\$1,150,000', 'Risk Offset'),
-        _TreasuryRow('Market-Making Inventory', '\$2,480,000', 'Execution Support'),
+        _TreasuryRow(
+            'Event Liquidity Inventory', '\$2,480,000', 'Forecast Support'),
         _TreasuryRow('Protocol Fees (30D)', '\$380,000', 'Revenue'),
       ],
       rowId: (row) => row.bucket,
@@ -446,7 +452,8 @@ class _SystemStatusRow {
 }
 
 class _IncidentRow {
-  const _IncidentRow(this.id, this.openedAt, this.summary, this.status, this.owner);
+  const _IncidentRow(
+      this.id, this.openedAt, this.summary, this.status, this.owner);
 
   final String id;
   final String openedAt;

@@ -7,29 +7,27 @@ import 'package:http/http.dart' as http;
 import '../core/constants.dart';
 import '../core/theme.dart';
 
-class TickerItem {
-  const TickerItem({
+class _SignalItem {
+  const _SignalItem({
     required this.symbol,
-    required this.price,
-    required this.changePct,
-    required this.volume24h,
+    required this.consensusShiftPct,
+    required this.eventLiquidity,
   });
 
   final String symbol;
-  final double price;
-  final double changePct;
-  final double volume24h;
+  final double consensusShiftPct;
+  final double eventLiquidity;
 }
 
-class LiveTickerBar extends StatefulWidget {
-  const LiveTickerBar({super.key});
+class LiveSignalBar extends StatefulWidget {
+  const LiveSignalBar({super.key});
 
   @override
-  State<LiveTickerBar> createState() => _LiveTickerBarState();
+  State<LiveSignalBar> createState() => _LiveSignalBarState();
 }
 
-class _LiveTickerBarState extends State<LiveTickerBar> {
-  List<TickerItem> _items = const [];
+class _LiveSignalBarState extends State<LiveSignalBar> {
+  List<_SignalItem> _items = const [];
   Timer? _timer;
 
   @override
@@ -49,11 +47,10 @@ class _LiveTickerBarState extends State<LiveTickerBar> {
       final items = data
           .map((item) => item as Map<String, dynamic>)
           .map(
-            (json) => TickerItem(
+            (json) => _SignalItem(
               symbol: json['symbol'] as String,
-              price: (json['price_usd'] as num).toDouble(),
-              changePct: (json['change_24h'] as num).toDouble(),
-              volume24h: (json['volume_24h'] as num).toDouble(),
+              consensusShiftPct: (json['change_24h'] as num).toDouble(),
+              eventLiquidity: (json['volume_24h'] as num).toDouble(),
             ),
           )
           .toList();
@@ -85,13 +82,13 @@ class _LiveTickerBarState extends State<LiveTickerBar> {
           const Icon(Icons.fiber_manual_record,
               size: 10, color: AetherColors.success),
           const SizedBox(width: 8),
-          const Text('LIVE',
+          const Text('LIVE SIGNALS',
               style: TextStyle(fontSize: 12, color: AetherColors.muted)),
           const SizedBox(width: 12),
           Expanded(
             child: _items.isEmpty
                 ? const Text(
-                    'No live market snapshots available yet.',
+                    'No live consensus shifts available yet.',
                     style: TextStyle(fontSize: 12, color: AetherColors.muted),
                   )
                 : ListView.separated(
@@ -100,16 +97,16 @@ class _LiveTickerBarState extends State<LiveTickerBar> {
                     separatorBuilder: (_, __) => const SizedBox(width: 16),
                     itemBuilder: (_, i) {
                       final item = _items[i];
-                      final up = item.changePct >= 0;
+                      final up = item.consensusShiftPct >= 0;
                       return Row(
                         children: [
                           Text(
-                            '${item.symbol}/USD ${item.price.toStringAsFixed(item.price > 100 ? 0 : 2)}',
+                            '${item.symbol} consensus',
                             style: const TextStyle(fontSize: 12),
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '${up ? '▲' : '▼'}${item.changePct.abs().toStringAsFixed(2)}%',
+                            '${up ? '▲' : '▼'}${item.consensusShiftPct.abs().toStringAsFixed(2)}%',
                             style: TextStyle(
                               color: up
                                   ? AetherColors.success
@@ -119,7 +116,7 @@ class _LiveTickerBarState extends State<LiveTickerBar> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'V:${_formatCompact(item.volume24h)}',
+                            'Liquidity:${_formatCompact(item.eventLiquidity)}',
                             style: const TextStyle(
                                 fontSize: 11, color: AetherColors.muted),
                           ),
@@ -134,7 +131,9 @@ class _LiveTickerBarState extends State<LiveTickerBar> {
   }
 
   String _formatCompact(double value) {
-    if (value >= 1000000000) return '${(value / 1000000000).toStringAsFixed(1)}B';
+    if (value >= 1000000000) {
+      return '${(value / 1000000000).toStringAsFixed(1)}B';
+    }
     if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
     if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
     return value.toStringAsFixed(0);

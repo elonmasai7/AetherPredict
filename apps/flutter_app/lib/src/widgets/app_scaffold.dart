@@ -6,7 +6,7 @@ import '../core/providers.dart';
 import '../core/theme.dart';
 import '../core/wallet_service.dart';
 import 'enterprise/enterprise_components.dart';
-import 'live_ticker_bar.dart';
+import 'live_signal_bar.dart';
 
 class _NavItem {
   const _NavItem(this.label, this.path, this.icon, {this.mobile = false});
@@ -18,15 +18,27 @@ class _NavItem {
 }
 
 const _navItems = [
-  _NavItem('Overview', '/overview', Icons.grid_view_rounded, mobile: true),
-  _NavItem('Markets', '/markets', Icons.candlestick_chart_rounded, mobile: true),
-  _NavItem('Trading', '/trading', Icons.swap_horiz_rounded, mobile: true),
-  _NavItem('Vaults', '/vaults', Icons.account_balance_rounded),
-  _NavItem('Copy Trading', '/copy-trading', Icons.share_rounded),
-  _NavItem('Portfolio', '/portfolio', Icons.account_balance_wallet_rounded, mobile: true),
-  _NavItem('Risk', '/risk', Icons.shield_outlined),
-  _NavItem('Research', '/research', Icons.manage_search_rounded),
-  _NavItem('Alerts', '/alerts', Icons.notifications_active_outlined, mobile: true),
+  _NavItem('Forecast Overview', '/forecast-overview', Icons.grid_view_rounded,
+      mobile: true),
+  _NavItem('Live Prediction Markets', '/live-prediction-markets',
+      Icons.query_stats_rounded,
+      mobile: true),
+  _NavItem('Create Prediction', '/create-prediction', Icons.add_chart_rounded,
+      mobile: true),
+  _NavItem(
+      'My Positions', '/my-positions', Icons.account_balance_wallet_rounded,
+      mobile: true),
+  _NavItem('AI Forecast Engine', '/ai-forecast-engine',
+      Icons.psychology_alt_rounded),
+  _NavItem('Autonomous Agents', '/autonomous-agents', Icons.smart_toy_outlined),
+  _NavItem(
+      'Liquidity Vaults', '/liquidity-vaults', Icons.account_balance_rounded),
+  _NavItem('Risk Intelligence', '/risk-intelligence', Icons.shield_outlined),
+  _NavItem('Market Resolution', '/market-resolution', Icons.gavel_rounded),
+  _NavItem('Disputes', '/disputes', Icons.balance_rounded),
+  _NavItem(
+      'Research & Thesis', '/research-thesis', Icons.manage_search_rounded),
+  _NavItem('Leaderboard', '/leaderboard', Icons.leaderboard_rounded),
   _NavItem('Reports', '/reports', Icons.receipt_long_rounded),
   _NavItem('Operations', '/operations', Icons.precision_manufacturing_rounded),
   _NavItem('Settings', '/settings', Icons.settings_outlined),
@@ -59,10 +71,11 @@ class AppScaffold extends ConsumerWidget {
       next.whenData((update) {
         if (!context.mounted) return;
         final message = update.status.toLowerCase() == 'confirmed'
-            ? 'Trade ${update.tradeId ?? ''} settled on-chain.'
-            : 'Trade update: ${update.status}';
+            ? 'Forecast position ${update.tradeId ?? ''} settled on-chain.'
+            : 'Forecast update: ${update.status}';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+          SnackBar(
+              content: Text(message), duration: const Duration(seconds: 3)),
         );
       });
     });
@@ -70,12 +83,15 @@ class AppScaffold extends ConsumerWidget {
     final portfolioSummary = portfolio.maybeWhen(
       data: (positions) {
         final pnl = positions.fold<double>(0, (sum, item) => sum + item.pnl);
-        return '${positions.length} positions • ${formatUsd(pnl, fractionDigits: 0)} PnL';
+        return '${positions.length} open forecasts • ${formatUsd(pnl, fractionDigits: 0)} forecast PnL';
       },
-      orElse: () => 'Portfolio syncing',
+      orElse: () => 'Positions syncing',
     );
 
-    if (!auth.isAuthenticated && path != '/login' && path != '/signup' && path != '/') {
+    if (!auth.isAuthenticated &&
+        path != '/login' &&
+        path != '/signup' &&
+        path != '/') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
           context.go('/login');
@@ -93,7 +109,7 @@ class AppScaffold extends ConsumerWidget {
             Expanded(
               child: Column(
                 children: [
-                  const LiveTickerBar(),
+                  const LiveSignalBar(),
                   _TopBar(
                     title: title,
                     subtitle: subtitle,
@@ -106,7 +122,9 @@ class AppScaffold extends ConsumerWidget {
                         ref.read(walletSessionProvider.notifier).disconnect(),
                     onSignOut: () async {
                       await ref.read(authSessionProvider.notifier).clear();
-                      await ref.read(walletSessionProvider.notifier).disconnect();
+                      await ref
+                          .read(walletSessionProvider.notifier)
+                          .disconnect();
                       if (context.mounted) {
                         context.go('/login');
                       }
@@ -135,7 +153,9 @@ class AppScaffold extends ConsumerWidget {
   }
 
   String _walletSummary(WalletSessionState wallet) {
-    if (!wallet.connected || wallet.address == null || wallet.address!.isEmpty) {
+    if (!wallet.connected ||
+        wallet.address == null ||
+        wallet.address!.isEmpty) {
       return 'Wallet offline';
     }
     final address = wallet.address!;
@@ -188,9 +208,11 @@ class _Sidebar extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Institutional Financial Intelligence',
-              style:
-                  Theme.of(context).textTheme.labelSmall?.copyWith(height: 1.35),
+              'AI-powered on-chain prediction intelligence infrastructure',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(height: 1.35),
             ),
             const SizedBox(height: 18),
             Expanded(
@@ -208,10 +230,11 @@ class _Sidebar extends StatelessWidget {
             const Divider(height: 18),
             Row(
               children: [
-                const Icon(Icons.sensors, size: 14, color: AetherColors.success),
+                const Icon(Icons.sensors,
+                    size: 14, color: AetherColors.success),
                 const SizedBox(width: 8),
                 Text(
-                  'System Operational',
+                  'Forecast Grid Operational',
                   style: Theme.of(context)
                       .textTheme
                       .labelSmall
@@ -335,18 +358,19 @@ class _TopBar extends StatelessWidget {
           if (!compact) ...[
             StatusBadge(label: portfolioSummary),
             const SizedBox(width: 8),
-            const StatusBadge(label: 'Infrastructure Healthy'),
+            const StatusBadge(label: 'Resolution Network Healthy'),
             const SizedBox(width: 8),
             StatusBadge(
               label: walletLabel,
-              color: walletConnected ? AetherColors.success : AetherColors.warning,
+              color:
+                  walletConnected ? AetherColors.success : AetherColors.warning,
             ),
             const SizedBox(width: 8),
           ],
           _walletMenu(),
           const SizedBox(width: 4),
           IconButton(
-            tooltip: 'Alerts',
+            tooltip: 'Forecast alerts',
             onPressed: () => context.go('/alerts'),
             icon: const Icon(Icons.notifications_none_rounded),
           ),
@@ -449,7 +473,8 @@ class _MobileNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = _navItems.where((item) => item.mobile).toList(growable: false);
+    final items =
+        _navItems.where((item) => item.mobile).toList(growable: false);
     final selectedIndex = items.indexWhere(
       (item) => path == item.path || path.startsWith('${item.path}/'),
     );

@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,13 +7,14 @@ import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/enterprise/enterprise_components.dart';
 
-enum _TradeStage {
-  marketSelect,
-  configureOrder,
-  riskPreview,
-  walletConfirm,
-  chainPending,
-  settlementReceipt,
+enum _CreationStage {
+  defineEvent,
+  defineOutcomes,
+  configureLiquidity,
+  defineResolution,
+  walletAuthorization,
+  chainPublication,
+  marketLive,
 }
 
 class TradeScreen extends ConsumerStatefulWidget {
@@ -26,88 +25,85 @@ class TradeScreen extends ConsumerStatefulWidget {
 }
 
 class _TradeScreenState extends ConsumerState<TradeScreen> {
-  _TradeStage _stage = _TradeStage.marketSelect;
+  _CreationStage _stage = _CreationStage.defineEvent;
   ActionButtonState _actionState = ActionButtonState.idle;
 
-  int _marketIndex = 0;
-  String _side = 'YES';
-  double _collateral = 5000;
-  double _slippageBps = 35;
+  final TextEditingController _questionController = TextEditingController(
+    text: 'Will BTC exceed \$120k by Dec 31, 2026?',
+  );
+  final TextEditingController _descriptionController = TextEditingController(
+    text:
+        'This market resolves YES if BTC/USD reference price on approved benchmark feeds is greater than \$120,000 at 23:59:59 UTC on Dec 31, 2026.',
+  );
+  final TextEditingController _expiryController =
+      TextEditingController(text: '2026-12-31');
+  final TextEditingController _oracleController =
+      TextEditingController(text: 'HashKey Verified Oracle Mesh');
+  final TextEditingController _resolutionRulesController =
+      TextEditingController(
+    text:
+        'AI resolution engine aggregates signed evidence sources, publishes confidence, and opens a 24h juror dispute window before final settlement.',
+  );
+
+  String _category = 'Macro';
+  double _yesSeed = 52;
+  double _initialLiquidity = 150000;
+  double _disputeWindowHours = 24;
+  bool _thinMarketSupport = true;
+  bool _autoAgentRebalance = true;
+
   String? _failure;
-  String? _receipt;
+  Market? _createdMarket;
+
+  @override
+  void dispose() {
+    _questionController.dispose();
+    _descriptionController.dispose();
+    _expiryController.dispose();
+    _oracleController.dispose();
+    _resolutionRulesController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final marketsValue = ref.watch(marketListProvider);
     final wallet = ref.watch(walletSessionProvider);
+    final noSeed = 100 - _yesSeed;
 
     return AppScaffold(
-      title: 'Trading Workflow',
-      subtitle: 'Controlled execution path with pre-trade risk and post-trade settlement controls.',
-      child: marketsValue.when(
-        data: (markets) {
-          if (markets.isEmpty) {
-            return const EmptyStateCard(
-              icon: Icons.timeline,
-              title: 'No tradable markets available',
-              message:
-                  'Market listing is empty. Create or ingest markets before launching execution workflows.',
+      title: 'Create Prediction',
+      subtitle:
+          'Publish new event-based prediction markets with AI resolution, on-chain settlement, and institutional controls.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 1180;
+          if (compact) {
+            return ListView(
+              children: [
+                _stageRail(),
+                const SizedBox(height: AetherSpacing.lg),
+                _stagePanel(
+                  walletConnected: wallet.connected,
+                  noSeed: noSeed,
+                ),
+              ],
             );
           }
 
-          _marketIndex = _marketIndex.clamp(0, markets.length - 1).toInt();
-          final market = markets[_marketIndex];
-          final impliedPrice =
-              _side == 'YES' ? market.yesProbability : 1 - market.yesProbability;
-          final estimatedContracts = _collateral / max(impliedPrice, 0.01);
-          final estimatedFee = _collateral * (_slippageBps / 10000);
-
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 1180;
-              if (compact) {
-                return ListView(
-                  children: [
-                    _stageRail(),
-                    const SizedBox(height: AetherSpacing.lg),
-                    _stagePanel(
-                      market: market,
-                      walletConnected: wallet.connected,
-                      estimatedContracts: estimatedContracts,
-                      impliedPrice: impliedPrice,
-                      estimatedFee: estimatedFee,
-                    ),
-                  ],
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(width: 320, child: _stageRail()),
-                  const SizedBox(width: AetherSpacing.lg),
-                  Expanded(
-                    child: _stagePanel(
-                      market: market,
-                      walletConnected: wallet.connected,
-                      estimatedContracts: estimatedContracts,
-                      impliedPrice: impliedPrice,
-                      estimatedFee: estimatedFee,
-                    ),
-                  ),
-                ],
-              );
-            },
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 340, child: _stageRail()),
+              const SizedBox(width: AetherSpacing.lg),
+              Expanded(
+                child: _stagePanel(
+                  walletConnected: wallet.connected,
+                  noSeed: noSeed,
+                ),
+              ),
+            ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => EnterprisePanel(
-          title: 'Unable to initialize trading workflow',
-          child: Text(
-            error.toString(),
-            style: const TextStyle(color: AetherColors.critical),
-          ),
-        ),
       ),
     );
   }
@@ -115,8 +111,9 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   Widget _stageRail() {
     final steps = _steps();
     return EnterprisePanel(
-      title: 'Execution Stages',
-      subtitle: 'Every order must pass all controls before settlement.',
+      title: 'Market Creation Stages',
+      subtitle:
+          'Every market must pass forecasting, resolution, and settlement controls.',
       child: Column(
         children: [
           for (var i = 0; i < steps.length; i++)
@@ -194,7 +191,8 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
                 const SizedBox(height: 2),
                 Text(
                   description,
-                  style: const TextStyle(color: AetherColors.muted, fontSize: 12),
+                  style:
+                      const TextStyle(color: AetherColors.muted, fontSize: 12),
                 ),
               ],
             ),
@@ -205,11 +203,8 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   }
 
   Widget _stagePanel({
-    required Market market,
     required bool walletConnected,
-    required double impliedPrice,
-    required double estimatedContracts,
-    required double estimatedFee,
+    required double noSeed,
   }) {
     return EnterprisePanel(
       title: _steps()[_stage.index].title,
@@ -217,23 +212,18 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
       trailing: Wrap(
         spacing: AetherSpacing.sm,
         children: [
-          StatusBadge(label: 'Stage ${_stage.index + 1}/6'),
+          StatusBadge(label: 'Stage ${_stage.index + 1}/7'),
           StatusBadge(
             label: walletConnected ? 'Wallet ready' : 'Wallet offline',
-            color: walletConnected ? AetherColors.success : AetherColors.warning,
+            color:
+                walletConnected ? AetherColors.success : AetherColors.warning,
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _stageBody(
-            market: market,
-            walletConnected: walletConnected,
-            impliedPrice: impliedPrice,
-            estimatedContracts: estimatedContracts,
-            estimatedFee: estimatedFee,
-          ),
+          _stageBody(walletConnected: walletConnected, noSeed: noSeed),
           const SizedBox(height: AetherSpacing.lg),
           Row(
             children: [
@@ -246,15 +236,12 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
               ),
               const SizedBox(width: AetherSpacing.sm),
               ActionStateButton(
-                label: _stage == _TradeStage.settlementReceipt
-                    ? 'Start New Trade'
+                label: _stage == _CreationStage.marketLive
+                    ? 'Create Another Market'
                     : 'Continue',
                 state: _effectiveActionState(walletConnected),
                 retryLabel: 'Retry Step',
-                onPressed: () => _advance(
-                  walletConnected: walletConnected,
-                  market: market,
-                ),
+                onPressed: () => _advance(walletConnected: walletConnected),
               ),
             ],
           ),
@@ -264,59 +251,65 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
   }
 
   Widget _stageBody({
-    required Market market,
     required bool walletConnected,
-    required double impliedPrice,
-    required double estimatedContracts,
-    required double estimatedFee,
+    required double noSeed,
   }) {
     return switch (_stage) {
-      _TradeStage.marketSelect => _marketSelection(market),
-      _TradeStage.configureOrder => _configureOrder(market),
-      _TradeStage.riskPreview => _riskPreview(estimatedContracts, estimatedFee),
-      _TradeStage.walletConfirm => _walletConfirm(walletConnected),
-      _TradeStage.chainPending => _chainPending(),
-      _TradeStage.settlementReceipt => _settlementReceipt(impliedPrice),
+      _CreationStage.defineEvent => _defineEvent(),
+      _CreationStage.defineOutcomes => _defineOutcomes(noSeed),
+      _CreationStage.configureLiquidity => _configureLiquidity(),
+      _CreationStage.defineResolution => _defineResolution(),
+      _CreationStage.walletAuthorization =>
+        _walletAuthorization(walletConnected),
+      _CreationStage.chainPublication => _chainPublication(),
+      _CreationStage.marketLive => _marketLive(),
     };
   }
 
-  Widget _marketSelection(Market market) {
-    final markets = ref.read(marketListProvider).valueOrNull ?? const [];
+  Widget _defineEvent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DropdownButtonFormField<int>(
-          value: _marketIndex,
-          decoration: const InputDecoration(labelText: 'Market'),
-          items: [
-            for (var i = 0; i < markets.length; i++)
-              DropdownMenuItem<int>(
-                value: i,
-                child: Text(markets[i].title),
-              ),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() {
-              _marketIndex = value;
-              _actionState = ActionButtonState.idle;
-            });
-          },
+        TextField(
+          controller: _questionController,
+          decoration: const InputDecoration(labelText: 'Event question'),
         ),
-        const SizedBox(height: AetherSpacing.md),
+        const SizedBox(height: AetherSpacing.sm),
+        TextField(
+          controller: _descriptionController,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Market specification',
+            hintText:
+                'Define explicit YES/NO resolution conditions and evidence policy.',
+          ),
+        ),
+        const SizedBox(height: AetherSpacing.sm),
         Row(
           children: [
             Expanded(
-              child: _infoCard(
-                label: 'Category',
-                value: market.category,
+              child: DropdownButtonFormField<String>(
+                value: _category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: const [
+                  DropdownMenuItem(value: 'Macro', child: Text('Macro')),
+                  DropdownMenuItem(value: 'DeFi', child: Text('DeFi')),
+                  DropdownMenuItem(
+                      value: 'Regulation', child: Text('Regulation')),
+                  DropdownMenuItem(value: 'Protocol', child: Text('Protocol')),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _category = value);
+                },
               ),
             ),
             const SizedBox(width: AetherSpacing.sm),
             Expanded(
-              child: _infoCard(
-                label: 'AI Confidence',
-                value: '${(market.aiConfidence * 100).toStringAsFixed(1)}%',
+              child: TextField(
+                controller: _expiryController,
+                decoration:
+                    const InputDecoration(labelText: 'Expiry (YYYY-MM-DD)'),
               ),
             ),
           ],
@@ -325,84 +318,101 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
     );
   }
 
-  Widget _configureOrder(Market market) {
+  Widget _defineOutcomes(double noSeed) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: AetherSpacing.sm,
-          children: [
-            ChoiceChip(
-              label: const Text('Buy YES'),
-              selected: _side == 'YES',
-              onSelected: (_) => setState(() => _side = 'YES'),
-            ),
-            ChoiceChip(
-              label: const Text('Buy NO'),
-              selected: _side == 'NO',
-              onSelected: (_) => setState(() => _side = 'NO'),
-            ),
-          ],
-        ),
-        const SizedBox(height: AetherSpacing.md),
-        Text('Collateral: ${formatUsd(_collateral)}'),
-        Slider(
-          min: 250,
-          max: 25000,
-          divisions: 99,
-          value: _collateral,
-          label: formatUsd(_collateral),
-          onChanged: (value) => setState(() => _collateral = value),
-        ),
-        const SizedBox(height: AetherSpacing.sm),
-        Text('Slippage tolerance: ${_slippageBps.toStringAsFixed(0)} bps'),
+        Text('Initial YES forecast confidence ${_yesSeed.toStringAsFixed(0)}%'),
         Slider(
           min: 5,
-          max: 120,
-          divisions: 23,
-          value: _slippageBps,
-          label: '${_slippageBps.toStringAsFixed(0)} bps',
-          onChanged: (value) => setState(() => _slippageBps = value),
-        ),
-        const SizedBox(height: AetherSpacing.sm),
-        Text(
-          'Target market: ${market.title}',
-          style: const TextStyle(color: AetherColors.muted),
-        ),
-      ],
-    );
-  }
-
-  Widget _riskPreview(double estimatedContracts, double estimatedFee) {
-    final leverageFlag = _collateral > 15000;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _infoCard(
-          label: 'Estimated contracts',
-          value: estimatedContracts.toStringAsFixed(0),
+          max: 95,
+          divisions: 90,
+          value: _yesSeed,
+          label: '${_yesSeed.toStringAsFixed(0)}%',
+          onChanged: (value) => setState(() => _yesSeed = value),
         ),
         const SizedBox(height: AetherSpacing.sm),
         _infoCard(
-          label: 'Estimated fees',
-          value: formatUsd(estimatedFee, fractionDigits: 2),
+          label: 'YES Seed Probability',
+          value: '${_yesSeed.toStringAsFixed(1)}%',
         ),
         const SizedBox(height: AetherSpacing.sm),
         _infoCard(
-          label: 'Risk classification',
-          value: leverageFlag ? 'Heightened' : 'Standard',
-          accent: leverageFlag ? AetherColors.warning : AetherColors.success,
+          label: 'NO Seed Probability',
+          value: '${noSeed.toStringAsFixed(1)}%',
         ),
         const SizedBox(height: AetherSpacing.sm),
         const Text(
-          'Risk checks include portfolio concentration, slippage stress, and exposure caps before wallet confirmation.',
+          'Seed probabilities initialize discovery and are updated by autonomous agents and live participant consensus.',
           style: TextStyle(color: AetherColors.muted),
         ),
       ],
     );
   }
 
-  Widget _walletConfirm(bool walletConnected) {
+  Widget _configureLiquidity() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Initial event liquidity ${formatUsd(_initialLiquidity)}'),
+        Slider(
+          min: 25000,
+          max: 1500000,
+          divisions: 59,
+          value: _initialLiquidity,
+          label: formatUsd(_initialLiquidity),
+          onChanged: (value) => setState(() => _initialLiquidity = value),
+        ),
+        const SizedBox(height: AetherSpacing.sm),
+        SwitchListTile(
+          value: _thinMarketSupport,
+          onChanged: (value) => setState(() => _thinMarketSupport = value),
+          title: const Text('Enable thin market support'),
+          subtitle: const Text(
+              'Allows smart liquidity agents to intervene when depth confidence drops.'),
+          contentPadding: EdgeInsets.zero,
+        ),
+        SwitchListTile(
+          value: _autoAgentRebalance,
+          onChanged: (value) => setState(() => _autoAgentRebalance = value),
+          title: const Text('Enable autonomous rebalancing'),
+          subtitle: const Text(
+              'AI agents optimize YES/NO pool balance and implied odds spread.'),
+          contentPadding: EdgeInsets.zero,
+        ),
+      ],
+    );
+  }
+
+  Widget _defineResolution() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _oracleController,
+          decoration: const InputDecoration(labelText: 'Resolution source'),
+        ),
+        const SizedBox(height: AetherSpacing.sm),
+        Text('Dispute window ${_disputeWindowHours.toStringAsFixed(0)} hours'),
+        Slider(
+          min: 6,
+          max: 96,
+          divisions: 15,
+          value: _disputeWindowHours,
+          label: '${_disputeWindowHours.toStringAsFixed(0)}h',
+          onChanged: (value) => setState(() => _disputeWindowHours = value),
+        ),
+        const SizedBox(height: AetherSpacing.sm),
+        TextField(
+          controller: _resolutionRulesController,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'AI resolution policy'),
+        ),
+      ],
+    );
+  }
+
+  Widget _walletAuthorization(bool walletConnected) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -414,37 +424,40 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
         ),
         const SizedBox(height: AetherSpacing.sm),
         const Text(
-          'On continue, the wallet receives a sign request. Rejections and chain reverts are captured as retryable failures.',
+          'On continue, market creation intent is validated, signed, and prepared for on-chain publication on HashKey Chain.',
           style: TextStyle(color: AetherColors.muted),
         ),
       ],
     );
   }
 
-  Widget _chainPending() {
+  Widget _chainPublication() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: const [
         LinearProgressIndicator(minHeight: 8),
         SizedBox(height: AetherSpacing.sm),
         Text(
-          'Transaction broadcasted to chain. Waiting for confirmation and settlement receipt.',
+          'Publishing market creation transaction to chain and waiting for final confirmation.',
           style: TextStyle(color: AetherColors.muted),
         ),
       ],
     );
   }
 
-  Widget _settlementReceipt(double impliedPrice) {
+  Widget _marketLive() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        StatusBadge(label: 'Settlement successful', color: AetherColors.success),
+        const StatusBadge(
+          label: 'Prediction market published',
+          color: AetherColors.success,
+        ),
         const SizedBox(height: AetherSpacing.sm),
-        Text(_receipt ?? 'No receipt generated'),
+        Text(_createdMarket?.title ?? _questionController.text.trim()),
         const SizedBox(height: AetherSpacing.sm),
         Text(
-          'Executed side $_side at ${(impliedPrice * 100).toStringAsFixed(2)}c with ${_slippageBps.toStringAsFixed(0)} bps slippage guard.',
+          'Market ID ${_createdMarket?.id ?? 'pending'} • Liquidity ${formatUsd(_initialLiquidity)} • Resolution window ${_disputeWindowHours.toStringAsFixed(0)}h',
           style: const TextStyle(color: AetherColors.muted),
         ),
       ],
@@ -483,12 +496,20 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
 
   List<_StageDescriptor> _steps() {
     return const [
-      _StageDescriptor('Market Select', 'Choose an active market tape.'),
-      _StageDescriptor('Configure Order', 'Set side, collateral, and slippage.'),
-      _StageDescriptor('Risk Preview', 'Validate exposure and fee impacts.'),
-      _StageDescriptor('Wallet Confirm', 'Request signature and confirm intent.'),
-      _StageDescriptor('Chain Pending', 'Await network settlement confirmation.'),
-      _StageDescriptor('Settlement Receipt', 'Finalize ticket and log outcome.'),
+      _StageDescriptor(
+          'Define Event', 'Write the event question and resolution criteria.'),
+      _StageDescriptor('Define Outcomes',
+          'Set YES/NO seed probabilities and confidence posture.'),
+      _StageDescriptor('Configure Liquidity',
+          'Allocate event liquidity and thin-market protections.'),
+      _StageDescriptor('Define Resolution',
+          'Set evidence sources, dispute window, and finality policy.'),
+      _StageDescriptor(
+          'Wallet Authorization', 'Authorize market publication intent.'),
+      _StageDescriptor('Chain Publication',
+          'Publish creation transaction on HashKey Chain.'),
+      _StageDescriptor(
+          'Market Live', 'Activate market for open forecast positions.'),
     ];
   }
 
@@ -499,42 +520,48 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
       return _actionState;
     }
 
-    if (_stage == _TradeStage.walletConfirm && !walletConnected) {
+    if (_stage == _CreationStage.walletAuthorization && !walletConnected) {
       return ActionButtonState.disabled;
     }
 
     return ActionButtonState.idle;
   }
 
-  Future<void> _advance({
-    required bool walletConnected,
-    required Market market,
-  }) async {
+  Future<void> _advance({required bool walletConnected}) async {
     if (_actionState == ActionButtonState.loading) return;
 
     if (_actionState == ActionButtonState.failure) {
       setState(() {
         _failure = null;
         _actionState = ActionButtonState.idle;
-        _stage = _TradeStage.walletConfirm;
+        _stage = _CreationStage.walletAuthorization;
       });
       return;
     }
 
-    if (_stage == _TradeStage.settlementReceipt) {
+    if (_stage == _CreationStage.marketLive) {
       setState(() {
-        _stage = _TradeStage.marketSelect;
+        _stage = _CreationStage.defineEvent;
         _actionState = ActionButtonState.idle;
         _failure = null;
-        _receipt = null;
+        _createdMarket = null;
       });
       return;
     }
 
-    if (_stage == _TradeStage.walletConfirm) {
+    if (_stage == _CreationStage.walletAuthorization) {
       if (!walletConnected) {
         setState(() {
-          _failure = 'Connect wallet before signature request.';
+          _failure = 'Connect wallet before publishing prediction market.';
+          _actionState = ActionButtonState.failure;
+        });
+        return;
+      }
+
+      if (_questionController.text.trim().isEmpty ||
+          _descriptionController.text.trim().isEmpty) {
+        setState(() {
+          _failure = 'Event question and market specification are required.';
           _actionState = ActionButtonState.failure;
         });
         return;
@@ -545,29 +572,28 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
         _actionState = ActionButtonState.loading;
       });
 
-      await Future<void>.delayed(const Duration(seconds: 1));
-      setState(() {
-        _stage = _TradeStage.chainPending;
-      });
+      try {
+        final market = await _createMarketRecord();
+        if (!mounted) return;
 
-      await Future<void>.delayed(const Duration(seconds: 2));
-      final random = Random();
-      final success = random.nextInt(100) > 18;
+        setState(() {
+          _createdMarket = market;
+          _stage = _CreationStage.chainPublication;
+        });
 
-      if (!mounted) return;
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
 
-      if (success) {
         setState(() {
           _actionState = ActionButtonState.success;
-          _stage = _TradeStage.settlementReceipt;
-          _receipt =
-              'Ticket TR-${DateTime.now().millisecondsSinceEpoch % 100000} settled on ${market.id} at ${DateTime.now().toUtc().toIso8601String()}';
+          _stage = _CreationStage.marketLive;
         });
-      } else {
+      } catch (error) {
+        if (!mounted) return;
         setState(() {
           _actionState = ActionButtonState.failure;
-          _failure = 'Chain confirmation timed out. Retry wallet confirmation.';
-          _stage = _TradeStage.walletConfirm;
+          _failure = 'Market publication failed: $error';
+          _stage = _CreationStage.walletAuthorization;
         });
       }
       return;
@@ -576,8 +602,26 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
     setState(() {
       _failure = null;
       _actionState = ActionButtonState.idle;
-      _stage = _TradeStage.values[_stage.index + 1];
+      _stage = _CreationStage.values[_stage.index + 1];
     });
+  }
+
+  Future<Market> _createMarketRecord() async {
+    final wallet = ref.read(walletSessionProvider);
+    final payload = {
+      'title': _questionController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'category': _category,
+      'oracle_source': _oracleController.text.trim(),
+      'expiry_at': '${_expiryController.text.trim()}T00:00:00Z',
+      'resolution_rules': _resolutionRulesController.text.trim(),
+      'collateral_token': 'USDC',
+      'liquidity_amount': _initialLiquidity,
+      'wallet_address': wallet.address,
+    };
+    final market = await ref.read(apiClientProvider).createMarket(payload);
+    ref.invalidate(marketListProvider);
+    return market;
   }
 
   void _back() {
@@ -585,7 +629,7 @@ class _TradeScreenState extends ConsumerState<TradeScreen> {
     setState(() {
       _actionState = ActionButtonState.idle;
       _failure = null;
-      _stage = _TradeStage.values[_stage.index - 1];
+      _stage = _CreationStage.values[_stage.index - 1];
     });
   }
 }

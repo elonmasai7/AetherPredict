@@ -16,7 +16,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   final _endController = TextEditingController(text: '2026-04-08');
   final _accountController = TextEditingController(text: 'Primary Desk');
 
-  String _reportType = 'Performance Statement';
+  String _reportType = 'Forecast Performance Statement';
   String _format = 'CSV';
   ActionButtonState _generateState = ActionButtonState.idle;
   String? _statusMessage;
@@ -33,12 +33,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Reports',
-      subtitle: 'Regulatory, audit, and desk reporting workflows with generation tracking.',
+      subtitle:
+          'Regulatory, audit, and forecast intelligence reporting workflows with generation tracking.',
       child: ListView(
         children: [
           EnterprisePanel(
             title: 'Generate Report',
-            subtitle: 'Configure scope, format, and desk account.',
+            subtitle: 'Configure scope, format, and forecast account.',
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact = constraints.maxWidth < 920;
@@ -91,19 +92,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       const SizedBox(height: AetherSpacing.sm),
                       DropdownButtonFormField<String>(
                         value: _reportType,
-                        decoration: const InputDecoration(labelText: 'Report Type'),
+                        decoration:
+                            const InputDecoration(labelText: 'Report Type'),
                         items: const [
                           DropdownMenuItem(
-                            value: 'Performance Statement',
-                            child: Text('Performance Statement'),
+                            value: 'Forecast Performance Statement',
+                            child: Text('Forecast Performance Statement'),
                           ),
                           DropdownMenuItem(
-                            value: 'Transaction History',
-                            child: Text('Transaction History'),
+                            value: 'Forecast Transaction History',
+                            child: Text('Forecast Transaction History'),
                           ),
                           DropdownMenuItem(
-                            value: 'Risk Summary',
-                            child: Text('Risk Summary'),
+                            value: 'Risk Intelligence Summary',
+                            child: Text('Risk Intelligence Summary'),
                           ),
                         ],
                         onChanged: (value) {
@@ -144,16 +146,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               ),
                               items: const [
                                 DropdownMenuItem(
-                                  value: 'Performance Statement',
-                                  child: Text('Performance Statement'),
+                                  value: 'Forecast Performance Statement',
+                                  child: Text('Forecast Performance Statement'),
                                 ),
                                 DropdownMenuItem(
-                                  value: 'Transaction History',
-                                  child: Text('Transaction History'),
+                                  value: 'Forecast Transaction History',
+                                  child: Text('Forecast Transaction History'),
                                 ),
                                 DropdownMenuItem(
-                                  value: 'Risk Summary',
-                                  child: Text('Risk Summary'),
+                                  value: 'Risk Intelligence Summary',
+                                  child: Text('Risk Intelligence Summary'),
                                 ),
                               ],
                               onChanged: (value) {
@@ -166,10 +168,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           Expanded(
                             child: DropdownButtonFormField<String>(
                               value: _format,
-                              decoration: const InputDecoration(labelText: 'Format'),
+                              decoration:
+                                  const InputDecoration(labelText: 'Format'),
                               items: const [
-                                DropdownMenuItem(value: 'CSV', child: Text('CSV')),
-                                DropdownMenuItem(value: 'PDF', child: Text('PDF')),
+                                DropdownMenuItem(
+                                    value: 'CSV', child: Text('CSV')),
+                                DropdownMenuItem(
+                                    value: 'PDF', child: Text('PDF')),
                               ],
                               onChanged: (value) {
                                 if (value == null) return;
@@ -231,12 +236,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           ),
                           const SizedBox(width: AetherSpacing.sm),
                           OutlinedButton.icon(
-                            onPressed: _generateState == ActionButtonState.loading
-                                ? null
-                                : () => setState(() {
-                                      _statusMessage =
-                                          'Template saved for recurring schedule.';
-                                    }),
+                            onPressed:
+                                _generateState == ActionButtonState.loading
+                                    ? null
+                                    : () => setState(() {
+                                          _statusMessage =
+                                              'Template saved for recurring schedule.';
+                                        }),
                             icon: const Icon(Icons.schedule),
                             label: const Text('Save Schedule'),
                           ),
@@ -250,7 +256,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
           const SizedBox(height: AetherSpacing.lg),
           EnterpriseDataTable<_ReportJob>(
             title: 'Report Job Queue',
-            subtitle: 'Generation, delivery, and audit state for each report run.',
+            subtitle:
+                'Generation, delivery, and audit state for each forecast report run.',
             rows: _jobs(),
             rowId: (row) => row.id,
             searchHint: 'Search report job id or account',
@@ -338,24 +345,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     setState(() {
       _generateState = ActionButtonState.loading;
-      _statusMessage = 'Submitting report job...';
+      _statusMessage = 'Submitting forecast report job...';
     });
 
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
-    final badRange = _startController.text.trim().compareTo(_endController.text.trim()) > 0;
+    final badRange =
+        _startController.text.trim().compareTo(_endController.text.trim()) > 0;
     if (badRange) {
       setState(() {
         _generateState = ActionButtonState.failure;
-        _statusMessage = 'Invalid date range. Start date must be before end date.';
+        _statusMessage =
+            'Invalid date range. Start date must be before end date.';
       });
       return;
     }
 
     setState(() {
       _generateState = ActionButtonState.success;
-      _statusMessage = 'Report generated and queued for delivery.';
+      _statusMessage = 'Forecast report generated and queued for delivery.';
     });
   }
 
@@ -364,7 +373,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _ReportJob(
         id: 'RP-9412',
         generatedAt: '2026-04-08T14:10:00Z',
-        type: 'Performance Statement',
+        type: 'Forecast Performance Statement',
         format: 'PDF',
         status: 'Completed',
         account: 'Primary Desk',
@@ -373,7 +382,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _ReportJob(
         id: 'RP-9408',
         generatedAt: '2026-04-08T13:42:00Z',
-        type: 'Transaction History',
+        type: 'Forecast Transaction History',
         format: 'CSV',
         status: 'Completed',
         account: 'Primary Desk',
@@ -382,7 +391,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _ReportJob(
         id: 'RP-9391',
         generatedAt: '2026-04-08T12:22:00Z',
-        type: 'Risk Summary',
+        type: 'Risk Intelligence Summary',
         format: 'PDF',
         status: 'Pending',
         account: 'Risk Desk',
@@ -391,7 +400,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _ReportJob(
         id: 'RP-9380',
         generatedAt: '2026-04-08T10:01:00Z',
-        type: 'Transaction History',
+        type: 'Forecast Transaction History',
         format: 'CSV',
         status: 'Failed',
         account: 'Treasury',

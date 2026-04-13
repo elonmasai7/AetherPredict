@@ -19,7 +19,8 @@ class MarketChart extends StatelessWidget {
           LineChartBarData(
             isCurved: true,
             spots: [
-              for (var i = 0; i < points.length; i++) FlSpot(i.toDouble(), points[i]),
+              for (var i = 0; i < points.length; i++)
+                FlSpot(i.toDouble(), points[i]),
             ],
             color: const Color(0xFF3ED6C5),
             barWidth: 3,

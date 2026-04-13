@@ -1,4 +1,4 @@
-"""strategy vaults and copy trading"""
+"""strategy vaults and copy forecasts"""
 
 from alembic import op
 import sqlalchemy as sa

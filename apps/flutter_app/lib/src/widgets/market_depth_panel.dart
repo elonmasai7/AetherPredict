@@ -45,32 +45,34 @@ class MarketDepthPanel extends StatelessWidget {
         final step = data.price * (spread / 1000);
         final bids = List.generate(
           8,
-          (i) => DepthLevel(data.price - (i * step), (data.volume / 100000000) / (i + 1)),
+          (i) => DepthLevel(
+              data.price - (i * step), (data.volume / 100000000) / (i + 1)),
         );
         final asks = List.generate(
           8,
-          (i) => DepthLevel(data.price + (i * step), (data.volume / 110000000) / (i + 1)),
+          (i) => DepthLevel(
+              data.price + (i * step), (data.volume / 110000000) / (i + 1)),
         );
 
         return GlassCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Indicative Market Depth',
+              const Text('Indicative Event Liquidity Depth',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               Text(
-                'Last: ${data.price.toStringAsFixed(data.price > 100 ? 2 : 4)} • Spread: ${spread.toStringAsFixed(2)}bp • 24h Volatility: ${data.volatility.toStringAsFixed(2)}%',
+                'Reference: ${data.price.toStringAsFixed(data.price > 100 ? 2 : 4)} • Implied odds spread: ${spread.toStringAsFixed(2)}bp • 24h volatility: ${data.volatility.toStringAsFixed(2)}%',
                 style: const TextStyle(fontSize: 12, color: AetherColors.muted),
               ),
               const SizedBox(height: 12),
               Row(
                 children: const [
                   Expanded(
-                      child: Text('Bids',
+                      child: Text('YES Pool',
                           style: TextStyle(color: AetherColors.success))),
                   Expanded(
-                      child: Text('Asks',
+                      child: Text('NO Pool',
                           style: TextStyle(color: AetherColors.critical))),
                 ],
               ),
@@ -100,7 +102,8 @@ class MarketDepthPanel extends StatelessWidget {
     );
   }
 
-  Future<({double price, double volatility, double volume})?> _loadSymbol() async {
+  Future<({double price, double volatility, double volume})?>
+      _loadSymbol() async {
     final response = await http
         .get(Uri.parse('${AppConfig.apiBaseUrl}/markets/assets'))
         .timeout(const Duration(seconds: 8));

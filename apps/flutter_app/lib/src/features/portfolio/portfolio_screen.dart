@@ -17,8 +17,9 @@ class PortfolioScreen extends ConsumerWidget {
     final riskValue = ref.watch(riskProvider);
 
     return AppScaffold(
-      title: 'Portfolio',
-      subtitle: 'Position inventory, balance sheet, and transaction audit trail.',
+      title: 'My Positions',
+      subtitle:
+          'Open forecast positions, settlement balances, and on-chain transaction intelligence.',
       child: positionsValue.when(
         data: (positions) {
           final grossExposure = positions.fold<double>(
@@ -32,15 +33,20 @@ class PortfolioScreen extends ConsumerWidget {
               riskValue.when(
                 data: (risk) => KpiStrip(
                   items: [
-                    KpiStripItem(label: 'Open Positions', value: '${positions.length}'),
-                    KpiStripItem(label: 'Gross Exposure', value: formatUsd(grossExposure)),
                     KpiStripItem(
-                      label: 'Open PnL',
+                        label: 'Open Positions', value: '${positions.length}'),
+                    KpiStripItem(
+                        label: 'Event Exposure',
+                        value: formatUsd(grossExposure)),
+                    KpiStripItem(
+                      label: 'Forecast PnL',
                       value: formatUsd(pnl),
                       positiveDelta: pnl >= 0,
-                      delta: pnl >= 0 ? 'Profitable' : 'Drawdown',
+                      delta: pnl >= 0 ? 'Positive' : 'Drawdown',
                     ),
-                    KpiStripItem(label: 'VaR 95', value: formatUsd(risk.var95)),
+                    KpiStripItem(
+                        label: 'Dispute Risk',
+                        value: '${(risk.var95 / 1000).toStringAsFixed(1)}%'),
                     KpiStripItem(label: 'Risk Score', value: risk.riskScore),
                   ],
                 ),
@@ -51,17 +57,18 @@ class PortfolioScreen extends ConsumerWidget {
               if (positions.isEmpty)
                 const EmptyStateCard(
                   icon: Icons.account_balance_wallet_outlined,
-                  title: 'No active positions',
+                  title: 'No active forecast positions',
                   message:
-                      'Portfolio is flat. Route a trade from Trading to initialize portfolio exposure.',
+                      'Open a YES/NO forecast from Live Prediction Markets to initialize your position book.',
                 )
               else
                 EnterpriseDataTable<PortfolioPosition>(
                   title: 'Position Book',
-                  subtitle: 'Open inventory with live marks and side-level risk context.',
+                  subtitle:
+                      'YES/NO inventory with live probability marks and forecast performance.',
                   rows: positions,
                   rowId: (row) => '${row.marketId}-${row.side}',
-                  searchHint: 'Search by market title or side',
+                  searchHint: 'Search by event title or side',
                   filters: [
                     EnterpriseTableFilter(
                       label: 'YES Side',
@@ -78,40 +85,42 @@ class PortfolioScreen extends ConsumerWidget {
                   ],
                   columns: [
                     EnterpriseTableColumn(
-                      label: 'Market',
-                      width: 250,
+                      label: 'Event Market',
+                      width: 280,
                       cell: (row) => row.marketTitle,
                       sortValue: (row) => row.marketTitle,
                     ),
                     EnterpriseTableColumn(
-                      label: 'Side',
-                      width: 85,
-                      cell: (row) => row.side,
+                      label: 'Position',
+                      width: 120,
+                      cell: (row) => 'Predict ${row.side.toUpperCase()}',
                       sortValue: (row) => row.side,
                     ),
                     EnterpriseTableColumn(
-                      label: 'Size',
-                      width: 90,
+                      label: 'Contracts',
+                      width: 100,
                       numeric: true,
                       cell: (row) => row.size.toStringAsFixed(0),
                       sortValue: (row) => row.size,
                     ),
                     EnterpriseTableColumn(
-                      label: 'Avg Px',
-                      width: 90,
+                      label: 'Open Prob.',
+                      width: 100,
                       numeric: true,
-                      cell: (row) => row.avgPrice.toStringAsFixed(3),
+                      cell: (row) =>
+                          '${(row.avgPrice * 100).toStringAsFixed(1)}%',
                       sortValue: (row) => row.avgPrice,
                     ),
                     EnterpriseTableColumn(
-                      label: 'Mark Px',
-                      width: 90,
+                      label: 'Current Prob.',
+                      width: 110,
                       numeric: true,
-                      cell: (row) => row.markPrice.toStringAsFixed(3),
+                      cell: (row) =>
+                          '${(row.markPrice * 100).toStringAsFixed(1)}%',
                       sortValue: (row) => row.markPrice,
                     ),
                     EnterpriseTableColumn(
-                      label: 'Notional',
+                      label: 'Exposure',
                       width: 120,
                       numeric: true,
                       cell: (row) => formatUsd(row.size * row.markPrice),
@@ -128,7 +137,9 @@ class PortfolioScreen extends ConsumerWidget {
                   expandedBuilder: (row) => Row(
                     children: [
                       StatusBadge(
-                        label: row.pnl >= 0 ? 'Gain' : 'Loss',
+                        label: row.pnl >= 0
+                            ? 'Forecast in favor'
+                            : 'Forecast against',
                         color: row.pnl >= 0
                             ? AetherColors.success
                             : AetherColors.warning,
@@ -147,15 +158,15 @@ class PortfolioScreen extends ConsumerWidget {
                   if (balances.isEmpty) {
                     return const EmptyStateCard(
                       icon: Icons.wallet_outlined,
-                      title: 'No wallet balances detected',
+                      title: 'No settlement balances detected',
                       message:
-                          'Connect a wallet or deposit collateral to populate balance inventory.',
+                          'Connect a wallet or deposit collateral to populate settlement inventory.',
                     );
                   }
 
                   return EnterpriseDataTable<WalletBalance>(
-                    title: 'Wallet Balances',
-                    subtitle: 'Token inventory by network and USD valuation.',
+                    title: 'Settlement Balances',
+                    subtitle: 'Token inventory by network with USD valuation.',
                     rows: balances,
                     rowId: (row) => '${row.symbol}-${row.network}',
                     searchHint: 'Search token or network',
@@ -183,7 +194,8 @@ class PortfolioScreen extends ConsumerWidget {
                         label: 'Price',
                         width: 100,
                         numeric: true,
-                        cell: (row) => formatUsd(row.priceUsd, fractionDigits: 2),
+                        cell: (row) =>
+                            formatUsd(row.priceUsd, fractionDigits: 2),
                         sortValue: (row) => row.priceUsd,
                       ),
                       EnterpriseTableColumn(
@@ -201,8 +213,9 @@ class PortfolioScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AetherSpacing.lg),
               EnterpriseDataTable<_TransactionRow>(
-                title: 'Transaction Log',
-                subtitle: 'Execution and treasury movement audit trail.',
+                title: 'On-chain Forecast Transactions',
+                subtitle:
+                    'Position lifecycle and settlement movement audit trail.',
                 rows: _transactionRowsFromPositions(positions),
                 rowId: (row) => row.id,
                 searchHint: 'Search transaction id or type',
@@ -225,13 +238,13 @@ class PortfolioScreen extends ConsumerWidget {
                   ),
                   EnterpriseTableColumn(
                     label: 'Type',
-                    width: 110,
+                    width: 160,
                     cell: (row) => row.type,
                     sortValue: (row) => row.type,
                   ),
                   EnterpriseTableColumn(
                     label: 'Reference',
-                    width: 220,
+                    width: 230,
                     cell: (row) => row.reference,
                     sortValue: (row) => row.reference,
                   ),
@@ -271,24 +284,26 @@ class PortfolioScreen extends ConsumerWidget {
 
   Widget _errorPanel(String message) {
     return EnterprisePanel(
-      title: 'Unable to load portfolio data',
-      child: Text(message, style: const TextStyle(color: AetherColors.critical)),
+      title: 'Unable to load position data',
+      child:
+          Text(message, style: const TextStyle(color: AetherColors.critical)),
     );
   }
 
-  List<_TransactionRow> _transactionRowsFromPositions(List<PortfolioPosition> positions) {
+  List<_TransactionRow> _transactionRowsFromPositions(
+      List<PortfolioPosition> positions) {
     final now = DateTime.now().toUtc();
     if (positions.isEmpty) {
       return [
         _TransactionRow(
           id: 'TX-0000',
-          type: 'Funding',
-          reference: 'No execution records yet',
+          type: 'Collateral Funding',
+          reference: 'No forecast executions yet',
           amount: 0,
           status: 'Pending',
           timestamp: now.toIso8601String(),
           hash: 'n/a',
-          counterparty: 'Treasury',
+          counterparty: 'Protocol Treasury',
         ),
       ];
     }
@@ -297,13 +312,14 @@ class PortfolioScreen extends ConsumerWidget {
       for (var i = 0; i < positions.length; i++)
         _TransactionRow(
           id: 'TX-${5100 + i}',
-          type: i.isEven ? 'Trade' : 'Hedge',
+          type: i.isEven ? 'Open Position' : 'Close Forecast',
           reference: positions[i].marketTitle,
           amount: positions[i].size * positions[i].markPrice,
           status: i % 4 == 0 ? 'Pending' : 'Settled',
           timestamp: now.subtract(Duration(minutes: i * 17)).toIso8601String(),
           hash: '0x${(5100 + i).toRadixString(16)}abc9',
-          counterparty: i.isEven ? 'Market Maker' : 'Internal Hedge Desk',
+          counterparty:
+              i.isEven ? 'Event Liquidity Pool' : 'Settlement Contract',
         ),
     ];
   }

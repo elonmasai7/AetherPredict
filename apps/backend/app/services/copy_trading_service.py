@@ -88,7 +88,7 @@ class CopyTradingService:
                 user_id=follower_user_id,
                 level="info",
                 category="copy",
-                message=f"Copy trading enabled for source #{payload.source_user_id}",
+                message=f"Copy forecasts enabled for source #{payload.source_user_id}",
                 metadata_json={"source_user_id": payload.source_user_id},
             )
         )

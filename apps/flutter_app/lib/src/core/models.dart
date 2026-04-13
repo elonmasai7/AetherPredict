@@ -4,9 +4,15 @@ class Market {
     required this.title,
     required this.category,
     required this.oracleSource,
+    required this.resolutionSource,
     required this.onChainAddress,
     required this.yesProbability,
+    required this.noProbability,
     required this.aiConfidence,
+    required this.expiry,
+    required this.participantCount,
+    required this.riskScore,
+    required this.consensusShift,
     required this.volume,
     required this.liquidity,
     required this.points,
@@ -16,31 +22,58 @@ class Market {
   final String title;
   final String category;
   final String oracleSource;
+  final String resolutionSource;
   final String? onChainAddress;
   final double yesProbability;
+  final double noProbability;
   final double aiConfidence;
+  final DateTime? expiry;
+  final int participantCount;
+  final double riskScore;
+  final double consensusShift;
   final double volume;
   final double liquidity;
   final List<double> points;
 
   factory Market.fromJson(Map<String, dynamic> json) {
-    final yesProbability = (json['yes_probability'] as num).toDouble();
+    final yesProbability = _safeProbability(json['yes_probability']);
+    final noProbability = 1 - yesProbability;
+    final aiConfidence = _safeProbability(json['ai_confidence']);
+    final oracleSource = (json['oracle_source'] as String?) ?? '';
+    final points = _parseProbabilityPoints(json);
+    final previous =
+        points.length > 1 ? points[points.length - 2] : yesProbability;
+    final participants = _readInt(json['participant_count']) ??
+        _readInt(json['participants']) ??
+        (((json['volume'] as num?)?.toDouble() ?? 0) / 75000)
+            .round()
+            .clamp(18, 3200)
+            .toInt();
+    final riskRaw = _readDouble(json['risk_score']) ??
+        (100 - (aiConfidence * 100)).clamp(6, 94).toDouble();
+    final riskScore = riskRaw <= 1 ? riskRaw * 100 : riskRaw;
+    final consensusShift = _readDouble(json['consensus_shift']) ??
+        ((yesProbability - previous) * 100);
     return Market(
       id: json['id'].toString(),
       title: json['title'] as String,
       category: json['category'] as String,
-      oracleSource: (json['oracle_source'] ?? '') as String,
+      oracleSource: oracleSource,
+      resolutionSource: (json['resolution_source'] as String?) ??
+          (oracleSource.isEmpty ? 'Verified Oracle Network' : oracleSource),
       onChainAddress: json['on_chain_address'] as String?,
       yesProbability: yesProbability,
-      aiConfidence: (json['ai_confidence'] as num).toDouble(),
-      volume: (json['volume'] as num).toDouble(),
-      liquidity: (json['liquidity'] as num).toDouble(),
-      points: [
-        (yesProbability - 0.08).clamp(0, 1),
-        (yesProbability - 0.04).clamp(0, 1),
-        (yesProbability - 0.02).clamp(0, 1),
-        yesProbability,
-      ],
+      noProbability: noProbability,
+      aiConfidence: aiConfidence,
+      expiry: _readDateTime(
+        json['expiry'] ?? json['expires_at'] ?? json['resolution_window_end'],
+      ),
+      participantCount: participants,
+      riskScore: riskScore.clamp(0, 100).toDouble(),
+      consensusShift: consensusShift,
+      volume: _readDouble(json['volume']) ?? 0,
+      liquidity: _readDouble(json['liquidity']) ?? 0,
+      points: points,
     );
   }
 }
@@ -49,23 +82,99 @@ class AgentCardModel {
   const AgentCardModel({
     required this.name,
     required this.status,
+    required this.strategy,
     required this.summary,
+    required this.confidence,
+    required this.historicalAccuracy,
+    required this.roi,
+    required this.currentActiveMarkets,
     required this.pnl,
   });
 
   final String name;
   final String status;
+  final String strategy;
   final String summary;
+  final double confidence;
+  final double historicalAccuracy;
+  final double roi;
+  final int currentActiveMarkets;
   final double pnl;
 
   factory AgentCardModel.fromJson(Map<String, dynamic> json) {
+    final confidenceRaw = _readDouble(json['confidence']) ??
+        _readDouble(json['ai_confidence']) ??
+        0.72;
+    final accuracyRaw = _readDouble(json['historical_accuracy']) ??
+        _readDouble(json['accuracy']) ??
+        0.7;
+    final roiRaw =
+        _readDouble(json['roi']) ?? (_readDouble(json['pnl']) ?? 0) / 100000;
+    final activeMarkets = _readInt(json['active_market_count']) ??
+        (json['active_markets'] is List
+            ? (json['active_markets'] as List<dynamic>).length
+            : 4);
     return AgentCardModel(
-      name: (json['agent'] as String).replaceAll('-', ' '),
-      status: json['status'] as String,
-      summary: json['summary'] as String,
-      pnl: (json['pnl'] as num).toDouble(),
+      name: ((json['agent'] as String?) ??
+              (json['name'] as String?) ??
+              'Autonomous Agent')
+          .replaceAll('-', ' '),
+      status: (json['status'] as String?) ?? 'active',
+      strategy: (json['strategy'] as String?) ?? 'Autonomous market balancing',
+      summary: (json['summary'] as String?) ??
+          'Monitoring event markets and rebalancing liquidity.',
+      confidence: confidenceRaw <= 1 ? confidenceRaw : confidenceRaw / 100,
+      historicalAccuracy: accuracyRaw <= 1 ? accuracyRaw : accuracyRaw / 100,
+      roi: roiRaw <= 1 ? roiRaw * 100 : roiRaw,
+      currentActiveMarkets: activeMarkets,
+      pnl: _readDouble(json['pnl']) ?? 0,
     );
   }
+}
+
+double _safeProbability(dynamic value) {
+  final raw = _readDouble(value) ?? 0.5;
+  final normalized = raw > 1 ? raw / 100 : raw;
+  return normalized.clamp(0, 1).toDouble();
+}
+
+double? _readDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
+}
+
+int? _readInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
+}
+
+DateTime? _readDateTime(dynamic value) {
+  if (value is String && value.isNotEmpty) {
+    return DateTime.tryParse(value);
+  }
+  return null;
+}
+
+List<double> _parseProbabilityPoints(Map<String, dynamic> json) {
+  final candidates = (json['probability_points'] as List<dynamic>?) ??
+      (json['points'] as List<dynamic>?);
+  if (candidates != null && candidates.isNotEmpty) {
+    final parsed = candidates.map(_safeProbability).toList(growable: false);
+    if (parsed.isNotEmpty) {
+      return parsed;
+    }
+  }
+
+  final yes = _safeProbability(json['yes_probability']);
+  return [
+    (yes - 0.1).clamp(0, 1).toDouble(),
+    (yes - 0.05).clamp(0, 1).toDouble(),
+    (yes - 0.02).clamp(0, 1).toDouble(),
+    yes,
+  ];
 }
 
 class PortfolioPosition {
@@ -202,7 +311,8 @@ class PortfolioRiskSnapshot {
       maxLoss: (json['max_loss'] as num).toDouble(),
       var95: (json['var_95'] as num).toDouble(),
       volatilityScore: (json['volatility_score'] as num).toDouble(),
-      confidenceWeightedRisk: (json['confidence_weighted_risk'] as num).toDouble(),
+      confidenceWeightedRisk:
+          (json['confidence_weighted_risk'] as num).toDouble(),
     );
   }
 }
@@ -411,7 +521,9 @@ class SentimentFeed {
     return SentimentFeed(
       sentimentScore: (json['sentiment_score'] as num).toDouble(),
       trend: json['trend'] as String,
-      newsItems: items.map((item) => NewsItem.fromJson(item as Map<String, dynamic>)).toList(),
+      newsItems: items
+          .map((item) => NewsItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
       confidenceShift: (json['confidence_shift'] as num).toInt(),
     );
   }
@@ -504,7 +616,8 @@ class AutoHedgePlan {
       enabled: json['enabled'] as bool,
       hedgeRatio: (json['hedge_ratio'] as num).toDouble(),
       protectionScore: json['protection_score'] as int,
-      estimatedLossReduction: (json['estimated_loss_reduction'] as num).toDouble(),
+      estimatedLossReduction:
+          (json['estimated_loss_reduction'] as num).toDouble(),
     );
   }
 }
@@ -591,13 +704,16 @@ class VaultModel {
       slug: json['slug'] as String,
       strategyDescription: json['strategy_description'] as String,
       riskProfile: json['risk_profile'] as String,
-      collateralTokenDecimals: (json['collateral_token_decimals'] as num?)?.toInt() ?? 18,
+      collateralTokenDecimals:
+          (json['collateral_token_decimals'] as num?)?.toInt() ?? 18,
       autoExecuteEnabled: (json['auto_execute_enabled'] as bool?) ?? false,
-      targetMarkets: (json['target_markets'] as List<dynamic>? ?? []).cast<String>(),
+      targetMarkets:
+          (json['target_markets'] as List<dynamic>? ?? []).cast<String>(),
       performanceHistory: (json['performance_history'] as List<dynamic>? ?? [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .toList(),
-      currentAllocation: Map<String, dynamic>.from(json['current_allocation'] as Map? ?? {}),
+      currentAllocation:
+          Map<String, dynamic>.from(json['current_allocation'] as Map? ?? {}),
       aiConfidenceScore: (json['ai_confidence_score'] as num).toDouble(),
       managerType: json['manager_type'] as String,
       roi7d: (json['roi_7d'] as num).toDouble(),
@@ -735,7 +851,8 @@ class CopyRelationshipModel {
       maxFollowerExposure: (json['max_follower_exposure'] as num).toDouble(),
       traderCommissionBps: (json['trader_commission_bps'] as num).toInt(),
       platformFeeBps: (json['platform_fee_bps'] as num).toInt(),
-      allowedMarketIds: (json['allowed_market_ids'] as List<dynamic>? ?? []).cast<int>(),
+      allowedMarketIds:
+          (json['allowed_market_ids'] as List<dynamic>? ?? []).cast<int>(),
     );
   }
 }
@@ -834,9 +951,10 @@ class CopyPortfolioSummaryModel {
       liveCopiedPositions: (json['live_copied_positions'] as num).toInt(),
       copiedRoi: (json['copied_roi'] as num).toDouble(),
       activeAlerts: (json['active_alerts'] as num).toInt(),
-      performanceByTrader: (json['performance_by_trader'] as List<dynamic>? ?? [])
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList(),
+      performanceByTrader:
+          (json['performance_by_trader'] as List<dynamic>? ?? [])
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList(),
     );
   }
 }

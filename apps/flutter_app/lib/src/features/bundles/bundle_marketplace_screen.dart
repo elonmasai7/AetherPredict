@@ -21,11 +21,14 @@ class BundleMarketplaceScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(items[index].name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(items[index].name,
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text(items[index].description),
                 const SizedBox(height: 8),
-                Text('Target Return ${items[index].targetReturn.toStringAsFixed(1)}%  |  ${items[index].riskLevel}'),
+                Text(
+                    'Target Return ${items[index].targetReturn.toStringAsFixed(1)}%  |  ${items[index].riskLevel}'),
               ],
             ),
           ),

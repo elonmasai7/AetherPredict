@@ -53,8 +53,7 @@ ThemeData buildAetherTheme() {
       headlineMedium:
           bodyText.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
       titleLarge: bodyText.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-      titleMedium:
-          bodyText.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      titleMedium: bodyText.titleMedium?.copyWith(fontWeight: FontWeight.w600),
       bodySmall:
           bodyText.bodySmall?.copyWith(color: AetherColors.muted, height: 1.35),
       labelSmall: bodyText.labelSmall?.copyWith(

@@ -12,7 +12,8 @@ class DisputeCenterScreen extends ConsumerStatefulWidget {
   const DisputeCenterScreen({super.key});
 
   @override
-  ConsumerState<DisputeCenterScreen> createState() => _DisputeCenterScreenState();
+  ConsumerState<DisputeCenterScreen> createState() =>
+      _DisputeCenterScreenState();
 }
 
 class _DisputeCenterScreenState extends ConsumerState<DisputeCenterScreen> {
@@ -23,24 +24,29 @@ class _DisputeCenterScreenState extends ConsumerState<DisputeCenterScreen> {
     final wallet = ref.watch(walletSessionProvider);
     final disputes = ref.watch(disputeHistoryProvider);
     return AppScaffold(
-      title: 'Dispute Center',
+      title: 'Disputes',
+      subtitle:
+          'Submit evidence-backed outcome challenges during juror dispute windows and track on-chain status.',
       child: ListView(
         children: [
           GlassCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Submit Market Dispute',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                const Text('Submit Outcome Dispute',
+                    style:
+                        TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 const Text(
-                  'Disputes are executed on-chain and require a wallet signature.',
+                  'Disputes are executed on-chain during the resolution window and require a wallet signature.',
                   style: TextStyle(color: AetherColors.muted),
                 ),
                 const SizedBox(height: 12),
                 FilledButton(
-                  onPressed: wallet.connected ? () => _openDisputeDialog(context) : null,
-                  child: const Text('Open Dispute'),
+                  onPressed: wallet.connected
+                      ? () => _openDisputeDialog(context)
+                      : null,
+                  child: const Text('Open Dispute Case'),
                 ),
                 if (!wallet.connected)
                   const Padding(
@@ -50,7 +56,8 @@ class _DisputeCenterScreenState extends ConsumerState<DisputeCenterScreen> {
                   ),
                 if (status != null) ...[
                   const SizedBox(height: 12),
-                  Text(status!, style: const TextStyle(color: AetherColors.muted)),
+                  Text(status!,
+                      style: const TextStyle(color: AetherColors.muted)),
                 ],
               ],
             ),
@@ -61,7 +68,8 @@ class _DisputeCenterScreenState extends ConsumerState<DisputeCenterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Dispute History',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
                 disputes.when(
                   data: (items) {
@@ -129,16 +137,27 @@ class _DisputeCenterScreenState extends ConsumerState<DisputeCenterScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: marketId, decoration: const InputDecoration(labelText: 'Market ID')),
+                  TextField(
+                      controller: marketId,
+                      decoration:
+                          const InputDecoration(labelText: 'Market ID')),
                   const SizedBox(height: 8),
-                  TextField(controller: evidence, decoration: const InputDecoration(labelText: 'Evidence URI')),
+                  TextField(
+                      controller: evidence,
+                      decoration:
+                          const InputDecoration(labelText: 'Evidence URI')),
                   const SizedBox(height: 8),
-                  TextField(controller: stake, decoration: const InputDecoration(labelText: 'Stake (ETH)')),
+                  TextField(
+                      controller: stake,
+                      decoration:
+                          const InputDecoration(labelText: 'Stake (ETH)')),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel')),
               FilledButton(
                 onPressed: () async {
                   try {
@@ -154,16 +173,20 @@ class _DisputeCenterScreenState extends ConsumerState<DisputeCenterScreen> {
                     }
                     final marketIdValue = int.parse(marketId.text);
                     final market = await api.fetchMarketById(marketIdValue);
-                    if (market.onChainAddress == null || market.onChainAddress!.isEmpty) {
-                      throw StateError('Market is not linked to an on-chain address.');
+                    if (market.onChainAddress == null ||
+                        market.onChainAddress!.isEmpty) {
+                      throw StateError(
+                          'Market is not linked to an on-chain address.');
                     }
                     final tx = await api.buildDisputeTx({
                       'market_address': market.onChainAddress,
                       'wallet_address': wallet.address,
-                      'amount_wei': ((double.tryParse(stake.text) ?? 0) * 1e18).round(),
+                      'amount_wei':
+                          ((double.tryParse(stake.text) ?? 0) * 1e18).round(),
                       'evidence_uri': evidence.text,
                     });
-                    final chainTxId = await api.createDisputeChainTx(marketIdValue, wallet.address!, evidence.text);
+                    final chainTxId = await api.createDisputeChainTx(
+                        marketIdValue, wallet.address!, evidence.text);
                     final txHash = await walletService.sendTransaction({
                       'from': wallet.address,
                       'to': tx['to'],

@@ -8,20 +8,21 @@ class ResearchWorkspaceScreen extends StatefulWidget {
   const ResearchWorkspaceScreen({super.key});
 
   @override
-  State<ResearchWorkspaceScreen> createState() => _ResearchWorkspaceScreenState();
+  State<ResearchWorkspaceScreen> createState() =>
+      _ResearchWorkspaceScreenState();
 }
 
 class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
   final _thesisController = TextEditingController(
     text: 'Thesis Summary\n'
         '- BTC trend persistence remains supported by ETF net inflows and on-chain participation recovery.\n'
-        '- Tactical plan: maintain directional bias with tighter downside invalidation under macro event risk windows.\n\n'
+        '- Tactical plan: maintain probability bias with tighter downside invalidation under macro event risk windows.\n\n'
         'Invalidation\n'
-        '- Spot volume divergence for 3 consecutive sessions\n'
+        '- Market volume divergence for 3 consecutive sessions\n'
         '- Macro liquidity impulse negative for two weekly prints\n\n'
-        'Execution Plan\n'
-        '- Entry tranches at 58-61% implied probability\n'
-        '- Hedge trigger above 80 bps realized spread widening',
+        'Forecast Plan\n'
+        '- Open forecast tranches at 58-61% implied probability\n'
+        '- Risk mitigation trigger above 80 bps realized spread widening',
   );
 
   String _draftState = 'Saved 2m ago';
@@ -36,8 +37,9 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'Research',
-      subtitle: 'Collaborative market thesis development and evidence management.',
+      title: 'Research & Thesis',
+      subtitle:
+          'Collaborative event thesis development, evidence management, and forecast publication.',
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 1220;
@@ -118,7 +120,8 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
   Widget _editorZone() {
     return EnterprisePanel(
       title: 'Thesis Editor',
-      subtitle: 'Draft, validate, and publish desk-level market intelligence.',
+      subtitle:
+          'Draft, validate, and publish desk-level prediction intelligence.',
       trailing: Wrap(
         spacing: AetherSpacing.sm,
         children: [
@@ -143,7 +146,7 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
               textAlignVertical: TextAlignVertical.top,
               decoration: const InputDecoration(
                 hintText:
-                    'Write thesis, invalidation criteria, catalysts, and execution notes...',
+                    'Write thesis, invalidation criteria, catalysts, and forecasting notes...',
               ),
             ),
           ),
@@ -153,7 +156,8 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
             subtitle: 'Source validation queue with confidence scoring.',
             rows: const [
               _EvidenceItem('ETF Flow Tape', 'Net inflow acceleration', 0.89),
-              _EvidenceItem('On-chain Monitor', 'Active address recovery', 0.81),
+              _EvidenceItem(
+                  'On-chain Monitor', 'Active address recovery', 0.81),
               _EvidenceItem('Funding Basis', 'Crowding risk elevated', 0.67),
               _EvidenceItem('Macro Liquidity', 'Impulse flattening', 0.62),
             ],
@@ -203,9 +207,11 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
             children: const [
               StatusBadge(label: '84% confidence'),
               SizedBox(height: AetherSpacing.sm),
-              Text('Positive factors: ETF flows, participation recovery, implied vol compression.'),
+              Text(
+                  'Positive factors: ETF flows, participation recovery, implied vol compression.'),
               SizedBox(height: AetherSpacing.sm),
-              Text('Risks: regulatory headline uncertainty, macro liquidity inflection.'),
+              Text(
+                  'Risks: regulatory headline uncertainty, macro liquidity inflection.'),
             ],
           ),
         ),

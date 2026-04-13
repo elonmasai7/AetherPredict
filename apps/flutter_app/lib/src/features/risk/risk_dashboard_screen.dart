@@ -13,11 +13,12 @@ class RiskDashboardScreen extends ConsumerStatefulWidget {
   const RiskDashboardScreen({super.key});
 
   @override
-  ConsumerState<RiskDashboardScreen> createState() => _RiskDashboardScreenState();
+  ConsumerState<RiskDashboardScreen> createState() =>
+      _RiskDashboardScreenState();
 }
 
 class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
-  double _shockPct = -15;
+  double _consensusShockPct = -12;
   ActionButtonState _simulationState = ActionButtonState.idle;
   String? _simulationMessage;
 
@@ -27,36 +28,66 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
     final exposureValue = ref.watch(exposureProvider);
 
     return AppScaffold(
-      title: 'Risk',
-      subtitle: 'Concentration controls, stress tests, and portfolio safeguard policies.',
+      title: 'Risk Intelligence',
+      subtitle:
+          'Institutional risk analytics for event probability volatility, manipulation exposure, dispute likelihood, and liquidity stress.',
       child: riskValue.when(
         data: (risk) {
-          final projectedPnl = risk.totalExposure * (_shockPct / 100) * 0.82;
-          final liquidationRisk = projectedPnl.abs() > risk.maxLoss * 0.7
-              ? 'High'
-              : projectedPnl.abs() > risk.maxLoss * 0.4
-                  ? 'Moderate'
-                  : 'Contained';
+          final confidenceVolatility =
+              (risk.volatilityScore * 100).clamp(8, 95).toDouble();
+          final manipulationRisk =
+              min(100, max(5, (risk.confidenceWeightedRisk * 100).round()))
+                  .toDouble();
+          final disputeLikelihood = min(100,
+                  max(4, ((risk.var95 / max(risk.maxLoss, 1)) * 100).round()))
+              .toDouble();
+          final liquidityRisk = min(
+                  100,
+                  max(3,
+                      ((risk.totalExposure / max(risk.var95, 1)) * 4).round()))
+              .toDouble();
+          final resolutionAmbiguity = min(
+                  100,
+                  max(6,
+                      ((confidenceVolatility + disputeLikelihood) / 2).round()))
+              .toDouble();
 
           return ListView(
             children: [
               KpiStrip(
                 items: [
-                  KpiStripItem(label: 'Total Exposure', value: formatUsd(risk.totalExposure)),
-                  KpiStripItem(label: 'Max Loss', value: formatUsd(risk.maxLoss)),
-                  KpiStripItem(label: 'VaR 95', value: formatUsd(risk.var95)),
                   KpiStripItem(
-                    label: 'Volatility Score',
-                    value: risk.volatilityScore.toStringAsFixed(2),
+                    label: 'Event Risk',
+                    value: risk.riskScore,
                   ),
-                  KpiStripItem(label: 'Risk Score', value: risk.riskScore),
+                  KpiStripItem(
+                    label: 'Confidence Volatility',
+                    value: '${confidenceVolatility.toStringAsFixed(1)}%',
+                  ),
+                  KpiStripItem(
+                    label: 'Manipulation Risk',
+                    value: '${manipulationRisk.toStringAsFixed(0)}/100',
+                  ),
+                  KpiStripItem(
+                    label: 'Dispute Likelihood',
+                    value: '${disputeLikelihood.toStringAsFixed(0)}%',
+                  ),
+                  KpiStripItem(
+                    label: 'Liquidity Risk',
+                    value: '${liquidityRisk.toStringAsFixed(0)}%',
+                  ),
+                  KpiStripItem(
+                    label: 'Resolution Ambiguity',
+                    value: '${resolutionAmbiguity.toStringAsFixed(0)}%',
+                  ),
                 ],
               ),
               const SizedBox(height: AetherSpacing.lg),
               exposureValue.when(
                 data: (exposure) => EnterpriseDataTable<ExposureSlice>(
-                  title: 'Exposure Concentration',
-                  subtitle: 'Category-level allocation and concentration monitor.',
+                  title: 'Event Concentration Map',
+                  subtitle:
+                      'Category-level allocation and concentration risk across active prediction markets.',
                   rows: exposure,
                   rowId: (row) => row.category,
                   searchHint: 'Search category',
@@ -82,7 +113,7 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
                     ),
                   ],
                   expandedBuilder: (row) => Text(
-                    'Concentration bucket ${row.allocation > 30 ? 'overwatch' : 'within threshold'} for ${row.category}.',
+                    'Risk band ${row.allocation > 30 ? 'elevated' : 'contained'} for ${row.category} event cluster.',
                     style: const TextStyle(color: AetherColors.muted),
                   ),
                 ),
@@ -96,12 +127,12 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
                   if (compact) {
                     return Column(
                       children: [
-                        _limitMonitorPanel(risk),
+                        _riskControlPanel(risk),
                         const SizedBox(height: AetherSpacing.lg),
                         _scenarioEnginePanel(
                           risk: risk,
-                          projectedPnl: projectedPnl,
-                          liquidationRisk: liquidationRisk,
+                          confidenceVolatility: confidenceVolatility,
+                          disputeLikelihood: disputeLikelihood,
                         ),
                       ],
                     );
@@ -110,13 +141,13 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: _limitMonitorPanel(risk)),
+                      Expanded(child: _riskControlPanel(risk)),
                       const SizedBox(width: AetherSpacing.lg),
                       Expanded(
                         child: _scenarioEnginePanel(
                           risk: risk,
-                          projectedPnl: projectedPnl,
-                          liquidationRisk: liquidationRisk,
+                          confidenceVolatility: confidenceVolatility,
+                          disputeLikelihood: disputeLikelihood,
                         ),
                       ),
                     ],
@@ -132,18 +163,20 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
     );
   }
 
-  Widget _limitMonitorPanel(PortfolioRiskSnapshot risk) {
+  Widget _riskControlPanel(PortfolioRiskSnapshot risk) {
     final rows = [
-      _LimitRow('Single Market Max', '25%', '21%', 'Healthy'),
-      _LimitRow('Sector Concentration', '40%', '37%', 'Watch'),
-      _LimitRow('Intraday Loss Cap', formatUsd(risk.maxLoss), formatUsd(risk.maxLoss * 0.63), 'Healthy'),
-      _LimitRow('Leverage Utilization', '2.5x', '2.2x', 'Watch'),
-      _LimitRow('Liquidity Coverage', '1.3x', '1.41x', 'Healthy'),
+      _RiskControlRow('Single Event Exposure', '25%', '21%', 'Healthy'),
+      _RiskControlRow('Category Concentration', '40%', '37%', 'Watch'),
+      _RiskControlRow('Max Confidence Volatility', '65%',
+          '${(risk.volatilityScore * 100).toStringAsFixed(0)}%', 'Healthy'),
+      _RiskControlRow('Dispute Escalation Buffer', '30%', '24%', 'Watch'),
+      _RiskControlRow('Resolution Ambiguity Cap', '45%', '32%', 'Healthy'),
     ];
 
-    return EnterpriseDataTable<_LimitRow>(
-      title: 'Limit Monitor',
-      subtitle: 'Control thresholds compared against current utilization.',
+    return EnterpriseDataTable<_RiskControlRow>(
+      title: 'Risk Control Monitor',
+      subtitle:
+          'Institutional control thresholds vs current forecast risk utilization.',
       rows: rows,
       rowId: (row) => row.control,
       searchHint: 'Search controls',
@@ -156,7 +189,7 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
       columns: [
         EnterpriseTableColumn(
           label: 'Control',
-          width: 220,
+          width: 240,
           cell: (row) => row.control,
           sortValue: (row) => row.control,
         ),
@@ -190,9 +223,9 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
                 : AetherColors.warning,
           ),
           const SizedBox(width: AetherSpacing.sm),
-          Text(
-            'Control owner: Risk Desk',
-            style: const TextStyle(color: AetherColors.muted),
+          const Text(
+            'Control owner: Risk Intelligence Desk',
+            style: TextStyle(color: AetherColors.muted),
           ),
         ],
       ),
@@ -201,31 +234,38 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
 
   Widget _scenarioEnginePanel({
     required PortfolioRiskSnapshot risk,
-    required double projectedPnl,
-    required String liquidationRisk,
+    required double confidenceVolatility,
+    required double disputeLikelihood,
   }) {
-    final projectedLossAbs = projectedPnl.abs();
-    final hedgeBump = min(45, max(8, ((projectedLossAbs / max(risk.var95, 1)) * 12).round()));
+    final projectedConfidenceDrawdown =
+        confidenceVolatility * (_consensusShockPct.abs() / 100);
+    final projectedDisputeSpike =
+        min(100, disputeLikelihood + (_consensusShockPct.abs() * 0.7));
+    final mitigationBoost = min(45,
+        max(8, ((projectedDisputeSpike / max(risk.var95, 1)) * 12).round()));
 
     return EnterprisePanel(
-      title: 'Scenario Engine',
-      subtitle: 'What-if stress simulation for pre-hedge planning.',
+      title: 'Scenario Intelligence Engine',
+      subtitle:
+          'What-if simulation for consensus shocks, dispute pressure, and liquidity dislocation.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Underlying shock ${_shockPct.toStringAsFixed(0)}%'),
+          Text('Consensus shock ${_consensusShockPct.toStringAsFixed(0)}%'),
           Slider(
             min: -45,
             max: 20,
             divisions: 65,
-            value: _shockPct,
-            label: '${_shockPct.toStringAsFixed(0)}%',
-            onChanged: (value) => setState(() => _shockPct = value),
+            value: _consensusShockPct,
+            label: '${_consensusShockPct.toStringAsFixed(0)}%',
+            onChanged: (value) => setState(() => _consensusShockPct = value),
           ),
           const SizedBox(height: AetherSpacing.sm),
-          _scenarioRow('Projected PnL', formatUsd(projectedPnl)),
-          _scenarioRow('Liquidation Risk', liquidationRisk),
-          _scenarioRow('Suggested Hedge Increase', '$hedgeBump%'),
+          _scenarioRow('Projected confidence drawdown',
+              '${projectedConfidenceDrawdown.toStringAsFixed(1)}%'),
+          _scenarioRow('Projected dispute likelihood',
+              '${projectedDisputeSpike.toStringAsFixed(1)}%'),
+          _scenarioRow('Suggested mitigation increase', '$mitigationBoost%'),
           const SizedBox(height: AetherSpacing.sm),
           if (_simulationMessage != null)
             Padding(
@@ -242,9 +282,9 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
               ),
             ),
           ActionStateButton(
-            label: 'Run Stress Test',
+            label: 'Run Risk Simulation',
             state: _simulationState,
-            retryLabel: 'Retry Stress Test',
+            retryLabel: 'Retry Simulation',
             onPressed: _runScenario,
           ),
         ],
@@ -257,7 +297,9 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
       padding: const EdgeInsets.only(bottom: AetherSpacing.sm),
       child: Row(
         children: [
-          Expanded(child: Text(key, style: const TextStyle(color: AetherColors.muted))),
+          Expanded(
+              child:
+                  Text(key, style: const TextStyle(color: AetherColors.muted))),
           Text(value),
         ],
       ),
@@ -266,8 +308,9 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
 
   Widget _errorPanel(String message) {
     return EnterprisePanel(
-      title: 'Unable to load risk data',
-      child: Text(message, style: const TextStyle(color: AetherColors.critical)),
+      title: 'Unable to load risk intelligence data',
+      child:
+          Text(message, style: const TextStyle(color: AetherColors.critical)),
     );
   }
 
@@ -284,18 +327,18 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
 
     setState(() {
       _simulationState = ActionButtonState.loading;
-      _simulationMessage = 'Running scenario across stress surfaces...';
+      _simulationMessage = 'Running risk intelligence simulation...';
     });
 
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
-    final fail = _shockPct <= -40;
+    final fail = _consensusShockPct <= -40;
     if (fail) {
       setState(() {
         _simulationState = ActionButtonState.failure;
         _simulationMessage =
-            'Stress engine timeout at extreme shock levels. Retry or reduce shock magnitude.';
+            'Simulation timeout under extreme shock profile. Retry with lower magnitude or staged assumptions.';
       });
       return;
     }
@@ -303,13 +346,14 @@ class _RiskDashboardScreenState extends ConsumerState<RiskDashboardScreen> {
     setState(() {
       _simulationState = ActionButtonState.success;
       _simulationMessage =
-          'Scenario completed. Hedge recommendation published to execution desk.';
+          'Simulation completed. Mitigation recommendations published to Operations and Resolution teams.';
     });
   }
 }
 
-class _LimitRow {
-  const _LimitRow(this.control, this.threshold, this.current, this.status);
+class _RiskControlRow {
+  const _RiskControlRow(
+      this.control, this.threshold, this.current, this.status);
 
   final String control;
   final String threshold;

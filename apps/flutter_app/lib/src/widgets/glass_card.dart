@@ -21,7 +21,9 @@ class GlassCard extends StatelessWidget {
     final panel = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: useGlass ? AetherColors.bgPanel.withValues(alpha: 0.72) : AetherColors.bgElevated,
+        color: useGlass
+            ? AetherColors.bgPanel.withValues(alpha: 0.72)
+            : AetherColors.bgElevated,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AetherColors.border),
         boxShadow: const [

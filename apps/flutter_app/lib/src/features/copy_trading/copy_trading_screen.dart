@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api_client.dart';
 import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -45,23 +44,24 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
     });
 
     return AppScaffold(
-      title: 'Copy Trading',
-      subtitle: 'Follower allocation controls, copied execution telemetry, and risk limits.',
+      title: 'Copy Forecasts',
+      subtitle:
+          'Follower allocation controls, copied forecast telemetry, and risk limits.',
       child: ListView(
         children: [
           summary.when(
             data: (item) => KpiStrip(
               items: [
                 KpiStripItem(
-                  label: 'Copied Traders',
+                  label: 'Copied Forecasters',
                   value: item.copiedTraders.toString(),
                 ),
                 KpiStripItem(
-                  label: 'Live Copied Positions',
+                  label: 'Live Copied Forecasts',
                   value: item.liveCopiedPositions.toString(),
                 ),
                 KpiStripItem(
-                  label: 'Copied ROI',
+                  label: 'Copied Forecast ROI',
                   value: '${(item.copiedRoi * 100).toStringAsFixed(2)}%',
                 ),
                 KpiStripItem(
@@ -105,14 +105,16 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
 
   Widget _followPanel() {
     return EnterprisePanel(
-      title: 'Follow Trader Workflow',
-      subtitle: 'Configure copied allocation and risk controls before activation.',
+      title: 'Follow Forecast Workflow',
+      subtitle:
+          'Configure copied forecast allocation and risk controls before activation.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
             controller: _sourceIdController,
-            decoration: const InputDecoration(labelText: 'Source Trader ID'),
+            decoration:
+                const InputDecoration(labelText: 'Source Forecaster ID'),
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: AetherSpacing.md),
@@ -151,11 +153,12 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
           ),
           if (_followError != null) ...[
             const SizedBox(height: AetherSpacing.sm),
-            Text(_followError!, style: const TextStyle(color: AetherColors.critical)),
+            Text(_followError!,
+                style: const TextStyle(color: AetherColors.critical)),
           ],
           const SizedBox(height: AetherSpacing.md),
           ActionStateButton(
-            label: 'Activate Follow',
+            label: 'Activate Copy Forecast',
             state: _followState,
             onPressed: _submitFollow,
             retryLabel: 'Retry Activation',
@@ -165,21 +168,22 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
     );
   }
 
-  Widget _relationshipsTable(AsyncValue<List<CopyRelationshipModel>> relationships) {
+  Widget _relationshipsTable(
+      AsyncValue<List<CopyRelationshipModel>> relationships) {
     return relationships.when(
       data: (items) {
         if (items.isEmpty) {
           return const EmptyStateCard(
             icon: Icons.people_outline,
-            title: 'No active copy relationships',
+            title: 'No active copy forecast relationships',
             message:
-                'Use the workflow panel to follow a trader and begin synchronized execution.',
+                'Use the workflow panel to follow a forecaster and begin synchronized forecast execution.',
           );
         }
 
         return EnterpriseDataTable<CopyRelationshipModel>(
-          title: 'Active Relationships',
-          subtitle: 'Follower exposure limits and source trader routing.',
+          title: 'Active Copy Relationships',
+          subtitle: 'Follower exposure limits and source forecaster routing.',
           rows: items,
           rowId: (row) => row.id.toString(),
           searchHint: 'Search source ID or risk profile',
@@ -195,7 +199,7 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
           ],
           columns: [
             EnterpriseTableColumn(
-              label: 'Source Trader',
+              label: 'Source Forecaster',
               width: 140,
               cell: (row) => '#${row.sourceUserId}',
               sortValue: (row) => row.sourceUserId,
@@ -230,12 +234,13 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
               label: 'Auto-stop',
               width: 95,
               numeric: true,
-              cell: (row) => '${(row.autoStopThreshold * 100).toStringAsFixed(1)}%',
+              cell: (row) =>
+                  '${(row.autoStopThreshold * 100).toStringAsFixed(1)}%',
               sortValue: (row) => row.autoStopThreshold,
             ),
           ],
           expandedBuilder: (row) => Text(
-            'Allowed markets: ${row.allowedMarketIds.join(', ')} • Commission ${row.traderCommissionBps} bps',
+            'Allowed event markets: ${row.allowedMarketIds.join(', ')} • Commission ${row.traderCommissionBps} bps',
             style: const TextStyle(color: AetherColors.muted),
           ),
           actionsBuilder: (row) => [
@@ -263,22 +268,24 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
         if (items.isEmpty) {
           return const EmptyStateCard(
             icon: Icons.timeline_outlined,
-            title: 'No copied trade executions',
+            title: 'No copied forecast executions',
             message:
-                'Execution records appear after followed traders trigger eligible trades.',
+                'Execution records appear after followed forecasters trigger eligible positions.',
           );
         }
 
         return EnterpriseDataTable<CopiedTradeModel>(
-          title: 'Copied Execution Log',
-          subtitle: 'Relationship-level copied trade outcomes and lifecycle states.',
+          title: 'Copied Forecast Log',
+          subtitle:
+              'Relationship-level copied forecast outcomes and lifecycle states.',
           rows: items,
           rowId: (row) => row.id.toString(),
-          searchHint: 'Search market, source trade, or status',
+          searchHint: 'Search market, source position, or status',
           filters: [
             EnterpriseTableFilter(
               label: 'Completed',
-              predicate: (row) => row.status.toLowerCase().contains('completed'),
+              predicate: (row) =>
+                  row.status.toLowerCase().contains('completed'),
             ),
             EnterpriseTableFilter(
               label: 'Failed',
@@ -287,7 +294,7 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
           ],
           columns: [
             EnterpriseTableColumn(
-              label: 'Copied Trade ID',
+              label: 'Copied Forecast ID',
               width: 120,
               cell: (row) => '#${row.id}',
               sortValue: (row) => row.id,
@@ -299,7 +306,7 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
               sortValue: (row) => row.relationshipId,
             ),
             EnterpriseTableColumn(
-              label: 'Source Trade',
+              label: 'Source Position',
               width: 100,
               cell: (row) => row.sourceTradeId.toString(),
               sortValue: (row) => row.sourceTradeId,
@@ -314,7 +321,8 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
               label: 'Allocation',
               width: 90,
               numeric: true,
-              cell: (row) => '${(row.copiedAllocation * 100).toStringAsFixed(1)}%',
+              cell: (row) =>
+                  '${(row.copiedAllocation * 100).toStringAsFixed(1)}%',
               sortValue: (row) => row.copiedAllocation,
             ),
             EnterpriseTableColumn(
@@ -344,8 +352,9 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
 
   Widget _errorPanel(String message) {
     return EnterprisePanel(
-      title: 'Unable to load copy trading data',
-      child: Text(message, style: const TextStyle(color: AetherColors.critical)),
+      title: 'Unable to load copy forecasts data',
+      child:
+          Text(message, style: const TextStyle(color: AetherColors.critical)),
     );
   }
 
@@ -363,7 +372,7 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
     final sourceId = int.tryParse(_sourceIdController.text.trim());
     if (sourceId == null) {
       setState(() {
-        _followError = 'Enter a numeric source trader ID.';
+        _followError = 'Enter a numeric source forecaster ID.';
         _followState = ActionButtonState.failure;
       });
       return;
@@ -393,7 +402,7 @@ class _CopyTradingScreenState extends ConsumerState<CopyTradingScreen> {
         _followState = ActionButtonState.success;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Copy relationship activated.')),
+        const SnackBar(content: Text('Copy forecast relationship activated.')),
       );
     } catch (error) {
       if (!mounted) return;

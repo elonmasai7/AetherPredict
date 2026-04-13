@@ -37,8 +37,11 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                 SizedBox(
                   width: 260,
                   child: TextField(
-                    decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search participant'),
-                    onChanged: (value) => setState(() => query = value.trim().toLowerCase()),
+                    decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Search participant'),
+                    onChanged: (value) =>
+                        setState(() => query = value.trim().toLowerCase()),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -57,7 +60,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             const SizedBox(height: 12),
             const TabBar(
               tabs: [
-                Tab(text: 'Top Traders'),
+                Tab(text: 'Top Forecasters'),
                 Tab(text: 'Best Agents'),
                 Tab(text: 'Top Jurors'),
                 Tab(text: 'Market Creators'),
@@ -80,10 +83,13 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     );
   }
 
-  Widget _tableFor(AsyncValue<List<LeaderboardEntry>> source, {bool enableActions = false}) {
+  Widget _tableFor(AsyncValue<List<LeaderboardEntry>> source,
+      {bool enableActions = false}) {
     return source.when(
       data: (items) {
-        final filtered = items.where((i) => query.isEmpty || i.name.toLowerCase().contains(query)).toList();
+        final filtered = items
+            .where((i) => query.isEmpty || i.name.toLowerCase().contains(query))
+            .toList();
         return GlassCard(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -96,7 +102,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                 DataColumn(label: Text('Lifetime Accuracy')),
                 DataColumn(label: Text('Win Rate')),
                 DataColumn(label: Text('Copied Followers')),
-                DataColumn(label: Text('Assets Copied')),
+                DataColumn(label: Text('Forecasts Copied')),
                 DataColumn(label: Text('Score')),
                 DataColumn(label: Text('Actions')),
               ],
@@ -107,7 +113,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                     DataCell(Text(item.name)),
                     DataCell(Text('${item.roi7d.toStringAsFixed(1)}%')),
                     DataCell(Text('${item.roi30d.toStringAsFixed(1)}%')),
-                    DataCell(Text('${item.lifetimeAccuracy.toStringAsFixed(1)}%')),
+                    DataCell(
+                        Text('${item.lifetimeAccuracy.toStringAsFixed(1)}%')),
                     DataCell(Text('${item.winRate.toStringAsFixed(1)}%')),
                     DataCell(Text('${item.copiedFollowers}')),
                     DataCell(Text('\$${item.assetsCopied.toStringAsFixed(1)}')),
@@ -170,7 +177,8 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                 : AetherColors.border;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+      decoration:
+          BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
       child: Text('#$rank'),
     );
   }
@@ -188,13 +196,14 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
         const SizedBox(width: 6),
         FilledButton(
           onPressed: () => _copyNow(context, item),
-          child: const Text('Copy Now'),
+          child: const Text('Copy Forecast'),
         ),
       ],
     );
   }
 
-  Future<void> _followTrader(BuildContext context, LeaderboardEntry item) async {
+  Future<void> _followTrader(
+      BuildContext context, LeaderboardEntry item) async {
     if (item.userId == null) return;
     try {
       await ref.read(apiClientProvider).followTrader({
@@ -211,13 +220,13 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
       ref.invalidate(copyPortfolioProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Followed ${item.name}')),
+          SnackBar(content: Text('Following forecasts from ${item.name}')),
         );
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Follow failed: $error')),
+          SnackBar(content: Text('Follow request failed: $error')),
         );
       }
     }
@@ -228,7 +237,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => const CopySettingsDialog(
-        title: 'Copy Settings',
+        title: 'Copy Forecast Settings',
         initialAllocation: 0.2,
         initialMaxLoss: 0.08,
         initialAutoStop: 0.08,
@@ -248,12 +257,12 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
       ref.invalidate(copyRelationshipsProvider);
       ref.invalidate(copyPortfolioProvider);
       if (mounted) {
-        context.go('/copy-trading');
+        context.go('/copy-forecasts');
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Copy failed: $error')),
+          SnackBar(content: Text('Copy forecast failed: $error')),
         );
       }
     }

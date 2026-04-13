@@ -15,7 +15,7 @@ from app.schemas.copy_trading import (
 from app.services.auth_service import get_current_user
 from app.services.copy_trading_service import CopyTradingService
 
-router = APIRouter(prefix="/copy-trading", tags=["copy-trading"])
+router = APIRouter(prefix="/copy-trading", tags=["copy-forecasts"])
 
 
 @router.post("/follow", response_model=CopyRelationshipResponse, status_code=201)

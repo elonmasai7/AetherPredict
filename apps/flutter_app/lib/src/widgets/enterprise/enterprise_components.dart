@@ -315,9 +315,9 @@ class ActionStateButton extends StatelessWidget {
       ActionButtonState.disabled => const Icon(Icons.block, size: 18),
     };
 
-    final enabled =
-        (state == ActionButtonState.idle || state == ActionButtonState.failure) &&
-            onPressed != null;
+    final enabled = (state == ActionButtonState.idle ||
+            state == ActionButtonState.failure) &&
+        onPressed != null;
 
     return FilledButton.icon(
       onPressed: enabled ? onPressed : null,
@@ -691,7 +691,8 @@ class _EnterpriseDataTableState<T> extends State<EnterpriseDataTable<T>> {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   child: Text(
                     column.cell(row),
-                    textAlign: column.numeric ? TextAlign.right : TextAlign.left,
+                    textAlign:
+                        column.numeric ? TextAlign.right : TextAlign.left,
                     style: Theme.of(context).textTheme.bodySmall,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

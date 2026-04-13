@@ -1,6 +1,6 @@
 # AetherPredict
 
-AetherPredict is a production-oriented decentralized prediction market platform built with Flutter, FastAPI, AI services, and Solidity on HashKey Chain.
+AetherPredict is an AI-powered on-chain prediction market on HashKey Chain that uses autonomous agents, smart liquidity, and AI-based resolution to deliver secure, real-time forecasting, trading, and risk intelligence for DeFi and financial markets.
 
 ## Architecture
 
@@ -12,9 +12,9 @@ AetherPredict is a production-oriented decentralized prediction market platform 
 
 ## Core capabilities
 
-- Create and trade on-chain YES/NO markets
-- Operate Strategy Vaults with AI- or human-managed execution and on-chain verification
-- Enable copy trading with proportional risk controls and real-time replication
+- Create and forecast on-chain YES/NO event markets
+- Operate Forecast Strategy Vaults with AI- or human-managed allocation and on-chain verification
+- Enable copy forecasts with proportional risk controls and real-time replication
 - Stream live probabilities and AI confidence updates
 - Monitor autonomous liquidity and sentinel agents
 - Submit disputes and review evidence
@@ -49,11 +49,11 @@ AetherPredict is a production-oriented decentralized prediction market platform 
 ## Database and migrations
 
 - Initialize schema with `cd apps/backend && alembic upgrade head`
-- The backend no longer seeds demo data at startup; production data comes from real user actions, persisted records, and live market sync jobs
+- The backend does not auto-seed synthetic records at startup; production data comes from real user actions, persisted records, and live market sync jobs
 - Redis is used for market update pub/sub and websocket fanout on `/ws/markets`
 - Backend startup now fails fast if Alembic migrations have not been applied
 
-## Strategy Vaults and Copy Trading
+## Strategy Vaults and Copy Forecasts
 
 - Vaults support `auto_execute_enabled` with allowlist enforcement for automated strategy execution.
 - Configure allowlists via `.env`: `VAULT_AUTO_EXECUTE_DEFAULT_SLUGS`, `VAULT_AUTO_EXECUTE_ALLOWLIST_IDS`, `VAULT_AUTO_EXECUTE_ALLOWLIST_MANAGER_ROLES`.

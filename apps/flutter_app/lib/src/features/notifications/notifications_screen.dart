@@ -11,7 +11,8 @@ class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
@@ -22,8 +23,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final notificationsValue = ref.watch(notificationsProvider);
 
     return AppScaffold(
-      title: 'Alerts',
-      subtitle: 'Prioritized event queue for trading, risk, and operations desks.',
+      title: 'Forecast Alerts',
+      subtitle:
+          'Prioritized event queue for forecasting, risk intelligence, and operations desks.',
       child: notificationsValue.when(
         data: (alerts) {
           final filtered = _applyQueueFilter(alerts);
@@ -38,7 +40,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             children: [
               KpiStrip(
                 items: [
-                  KpiStripItem(label: 'Total Alerts', value: alerts.length.toString()),
+                  KpiStripItem(
+                      label: 'Total Alerts', value: alerts.length.toString()),
                   KpiStripItem(label: 'Critical', value: critical.toString()),
                   KpiStripItem(label: 'Warning', value: warning.toString()),
                   KpiStripItem(
@@ -73,7 +76,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   icon: Icons.notifications_none,
                   title: 'No alerts in this queue',
                   message:
-                      'Current filter has no items. Monitoring remains active and new events will stream automatically.',
+                      'Current filter has no items. Monitoring remains active and new forecast events will stream automatically.',
                 )
               else
                 EnterpriseDataTable<AppNotification>(
@@ -90,7 +93,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     ),
                     EnterpriseTableFilter(
                       label: 'Warning',
-                      predicate: (row) => row.level.toLowerCase().contains('warning'),
+                      predicate: (row) =>
+                          row.level.toLowerCase().contains('warning'),
                     ),
                   ],
                   columns: [
@@ -109,19 +113,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     EnterpriseTableColumn(
                       label: 'Desk',
                       width: 110,
-                      cell: (row) => row.level.toLowerCase().contains('critical')
-                          ? 'Risk'
-                          : row.level.toLowerCase().contains('warning')
-                              ? 'Trading'
-                              : 'Ops',
+                      cell: (row) =>
+                          row.level.toLowerCase().contains('critical')
+                              ? 'Risk Intelligence'
+                              : row.level.toLowerCase().contains('warning')
+                                  ? 'Forecasting'
+                                  : 'Ops',
                       sortValue: (row) => row.level,
                     ),
                     EnterpriseTableColumn(
                       label: 'State',
                       width: 120,
-                      cell: (row) => row.level.toLowerCase().contains('critical')
-                          ? 'Action Required'
-                          : 'Monitoring',
+                      cell: (row) =>
+                          row.level.toLowerCase().contains('critical')
+                              ? 'Action Required'
+                              : 'Monitoring',
                       sortValue: (row) => row.level,
                     ),
                   ],

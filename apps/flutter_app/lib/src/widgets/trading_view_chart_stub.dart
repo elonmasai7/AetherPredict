@@ -27,7 +27,7 @@ class TradingViewChart extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          'Advanced TradingView chart is available on Web.\nSymbol: $symbol • TF: $timeframe\nOverlay Probability: ${overlayProbability != null ? (overlayProbability! * 100).toStringAsFixed(1) : '--'}%',
+          'Probability context panel\nEvent: $symbol • Window: $timeframe\nYES Probability: ${overlayProbability != null ? (overlayProbability! * 100).toStringAsFixed(1) : '--'}%',
           textAlign: TextAlign.center,
           style: const TextStyle(color: AetherColors.muted),
         ),

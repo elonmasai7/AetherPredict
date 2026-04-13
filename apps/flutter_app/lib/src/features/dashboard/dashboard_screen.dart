@@ -21,17 +21,19 @@ class DashboardScreen extends ConsumerWidget {
     final riskValue = ref.watch(riskProvider);
 
     return AppScaffold(
-      title: 'Overview',
-      subtitle: 'Live cross-desk posture, execution flow, and operational risk context.',
+      title: 'Forecast Overview',
+      subtitle:
+          'Institutional prediction intelligence posture across probabilities, open forecasts, and resolution risk.',
       child: portfolioValue.when(
         data: (positions) {
-          final activeExposure = positions.fold<double>(
+          final openExposure = positions.fold<double>(
             0,
             (sum, item) => sum + (item.size * item.markPrice),
           );
-          final netPnl =
+          final forecastPnl =
               positions.fold<double>(0, (sum, item) => sum + item.pnl);
-          final winners = positions.where((item) => item.pnl > 0).length;
+          final positiveForecasts =
+              positions.where((item) => item.pnl > 0).length;
 
           return marketsValue.when(
             data: (markets) {
@@ -41,71 +43,92 @@ class DashboardScreen extends ConsumerWidget {
                           .map((item) => item.aiConfidence)
                           .reduce((a, b) => a + b) /
                       markets.length;
+              final avgRisk = markets.isEmpty
+                  ? 0.0
+                  : markets
+                          .map((item) => item.riskScore)
+                          .reduce((a, b) => a + b) /
+                      markets.length;
 
               return riskValue.when(
                 data: (risk) {
                   final kpis = [
                     KpiStripItem(
-                      label: 'Net Exposure',
-                      value: formatUsd(activeExposure),
+                      label: 'Open Forecast Exposure',
+                      value: formatUsd(openExposure),
                     ),
                     KpiStripItem(
-                      label: 'Open Position PnL',
-                      value: formatUsd(netPnl),
-                      delta: netPnl >= 0 ? 'Up session' : 'Drawdown session',
-                      positiveDelta: netPnl >= 0,
+                      label: 'Forecast PnL',
+                      value: formatUsd(forecastPnl),
+                      delta: forecastPnl >= 0
+                          ? 'Positive session'
+                          : 'Drawdown session',
+                      positiveDelta: forecastPnl >= 0,
                     ),
                     KpiStripItem(
-                      label: 'Hit Ratio',
+                      label: 'Forecast Hit Ratio',
                       value: positions.isEmpty
                           ? '--'
-                          : '${((winners / positions.length) * 100).toStringAsFixed(1)}%',
+                          : '${((positiveForecasts / positions.length) * 100).toStringAsFixed(1)}%',
+                    ),
+                    KpiStripItem(
+                      label: 'AI Confidence (Avg)',
+                      value: '${(avgConfidence * 100).toStringAsFixed(1)}%',
+                    ),
+                    KpiStripItem(
+                      label: 'Market Risk (Avg)',
+                      value: avgRisk.toStringAsFixed(1),
                     ),
                     KpiStripItem(
                       label: 'Portfolio VaR 95',
                       value: formatUsd(risk.var95),
                       delta: 'Risk score ${risk.riskScore}',
                     ),
-                    KpiStripItem(
-                      label: 'Model Confidence (Avg)',
-                      value: '${(avgConfidence * 100).toStringAsFixed(1)}%',
-                    ),
                   ];
 
-                  final executionFeed = _buildExecutionFeed(positions);
+                  final settlementFeed = _buildSettlementFeed(positions);
 
                   return LayoutBuilder(
                     builder: (context, constraints) {
                       final compact = constraints.maxWidth < 1380;
                       return ListView(
                         children: [
+                          const EnterprisePanel(
+                            title: 'Core Product Identity',
+                            child: Text(
+                              'AetherPredict is an AI-powered on-chain prediction market on HashKey Chain that uses autonomous agents, smart liquidity, and AI-based resolution to deliver secure, real-time forecasting, trading, and risk intelligence for DeFi and financial markets.',
+                              style: TextStyle(color: AetherColors.muted),
+                            ),
+                          ),
+                          const SizedBox(height: AetherSpacing.lg),
                           KpiStrip(items: kpis),
                           const SizedBox(height: AetherSpacing.lg),
                           if (positions.isEmpty)
                             EmptyStateCard(
                               icon: Icons.account_balance_wallet_outlined,
-                              title: 'No active positions',
+                              title: 'No open forecast positions',
                               message:
-                                  'Execution desk has no open risk. Open Markets and place the first trade to initialize the book.',
-                              actionLabel: 'Open Markets',
-                              onAction: () => context.go('/markets'),
+                                  'Your portfolio is currently flat. Visit Live Prediction Markets to open a forecast position.',
+                              actionLabel: 'Open Live Markets',
+                              onAction: () =>
+                                  context.go('/live-prediction-markets'),
                             )
                           else
                             EnterpriseDataTable<PortfolioPosition>(
-                              title: 'Active Positions',
+                              title: 'My Open Positions',
                               subtitle:
-                                  'Desk-level positions marked to market and sortable by exposure and performance.',
+                                  'YES/NO forecast positions marked with probability-aware PnL and exposure metrics.',
                               rows: positions,
                               rowId: (row) => '${row.marketId}-${row.side}',
-                              searchHint: 'Search market, side, or ticket',
+                              searchHint: 'Search event, side, or market id',
                               filters: [
                                 EnterpriseTableFilter(
-                                  label: 'YES Side',
+                                  label: 'YES Positions',
                                   predicate: (row) =>
                                       row.side.toUpperCase() == 'YES',
                                 ),
                                 EnterpriseTableFilter(
-                                  label: 'NO Side',
+                                  label: 'NO Positions',
                                   predicate: (row) =>
                                       row.side.toUpperCase() == 'NO',
                                 ),
@@ -116,51 +139,54 @@ class DashboardScreen extends ConsumerWidget {
                               ],
                               columns: [
                                 EnterpriseTableColumn(
-                                  label: 'Market',
-                                  width: 260,
+                                  label: 'Event Market',
+                                  width: 300,
                                   cell: (row) => row.marketTitle,
                                   sortValue: (row) => row.marketTitle,
                                 ),
                                 EnterpriseTableColumn(
-                                  label: 'Side',
-                                  width: 90,
-                                  cell: (row) => row.side,
+                                  label: 'Position',
+                                  width: 100,
+                                  cell: (row) =>
+                                      'Predict ${row.side.toUpperCase()}',
                                   sortValue: (row) => row.side,
                                 ),
                                 EnterpriseTableColumn(
-                                  label: 'Notional',
+                                  label: 'Contracts',
+                                  numeric: true,
+                                  width: 110,
+                                  cell: (row) => row.size.toStringAsFixed(0),
+                                  sortValue: (row) => row.size,
+                                ),
+                                EnterpriseTableColumn(
+                                  label: 'Open Probability',
                                   numeric: true,
                                   width: 130,
                                   cell: (row) =>
-                                      formatUsd(row.size * row.markPrice),
-                                  sortValue: (row) => row.size * row.markPrice,
-                                ),
-                                EnterpriseTableColumn(
-                                  label: 'Avg Px',
-                                  numeric: true,
-                                  width: 90,
-                                  cell: (row) => row.avgPrice.toStringAsFixed(3),
+                                      '${(row.avgPrice * 100).toStringAsFixed(1)}%',
                                   sortValue: (row) => row.avgPrice,
                                 ),
                                 EnterpriseTableColumn(
-                                  label: 'Mark Px',
+                                  label: 'Current Probability',
                                   numeric: true,
-                                  width: 90,
-                                  cell: (row) => row.markPrice.toStringAsFixed(3),
+                                  width: 140,
+                                  cell: (row) =>
+                                      '${(row.markPrice * 100).toStringAsFixed(1)}%',
                                   sortValue: (row) => row.markPrice,
                                 ),
                                 EnterpriseTableColumn(
-                                  label: 'PnL',
+                                  label: 'Forecast PnL',
                                   numeric: true,
-                                  width: 120,
+                                  width: 130,
                                   cell: (row) => formatUsd(row.pnl),
                                   sortValue: (row) => row.pnl,
                                 ),
                               ],
                               expandedBuilder: (row) {
-                                final direction = row.side.toUpperCase() == 'YES'
-                                    ? 'Directional long in event probability.'
-                                    : 'Directional short in event probability.';
+                                final direction = row.side.toUpperCase() ==
+                                        'YES'
+                                    ? 'Position is aligned with positive event outcome.'
+                                    : 'Position is aligned with negative event outcome.';
                                 final riskBucket =
                                     (row.size * row.markPrice) > 25000
                                         ? 'Tier 1'
@@ -177,8 +203,8 @@ class DashboardScreen extends ConsumerWidget {
                                         StatusBadge(label: 'Risk $riskBucket'),
                                         StatusBadge(
                                           label: row.pnl >= 0
-                                              ? 'In-the-money'
-                                              : 'Underwater',
+                                              ? 'Forecast in favor'
+                                              : 'Forecast against',
                                           color: row.pnl >= 0
                                               ? AetherColors.success
                                               : AetherColors.warning,
@@ -188,34 +214,38 @@ class DashboardScreen extends ConsumerWidget {
                                     const SizedBox(height: 8),
                                     Text(
                                       direction,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     ),
                                   ],
                                 );
                               },
                               actionsBuilder: (row) => [
                                 IconButton(
-                                  tooltip: 'Open market',
+                                  tooltip: 'Open AI forecast engine',
                                   onPressed: () {
                                     final index = markets.indexWhere(
                                       (market) =>
-                                          int.tryParse(market.id) == row.marketId,
+                                          int.tryParse(market.id) ==
+                                          row.marketId,
                                     );
                                     if (index >= 0) {
                                       ref
-                                          .read(selectedMarketIndexProvider.notifier)
+                                          .read(selectedMarketIndexProvider
+                                              .notifier)
                                           .state = index;
-                                      context.go('/markets/detail');
+                                      context.go('/ai-forecast-engine');
                                     }
                                   },
-                                  icon: const Icon(Icons.open_in_new, size: 18),
+                                  icon: const Icon(Icons.psychology_alt_rounded,
+                                      size: 18),
                                 ),
                                 IconButton(
-                                  tooltip: 'Open risk controls',
-                                  onPressed: () => context.go('/risk'),
-                                  icon: const Icon(Icons.shield_outlined, size: 18),
+                                  tooltip: 'Open risk intelligence',
+                                  onPressed: () =>
+                                      context.go('/risk-intelligence'),
+                                  icon: const Icon(Icons.shield_outlined,
+                                      size: 18),
                                 ),
                               ],
                             ),
@@ -223,14 +253,16 @@ class DashboardScreen extends ConsumerWidget {
                           if (compact) ...[
                             _alertsPanel(notificationsValue),
                             const SizedBox(height: AetherSpacing.lg),
-                            _executionPanel(executionFeed),
+                            _settlementPanel(settlementFeed),
                           ] else
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(child: _alertsPanel(notificationsValue)),
+                                Expanded(
+                                    child: _alertsPanel(notificationsValue)),
                                 const SizedBox(width: AetherSpacing.lg),
-                                Expanded(child: _executionPanel(executionFeed)),
+                                Expanded(
+                                    child: _settlementPanel(settlementFeed)),
                               ],
                             ),
                         ],
@@ -258,15 +290,16 @@ class DashboardScreen extends ConsumerWidget {
         if (alerts.isEmpty) {
           return const EmptyStateCard(
             icon: Icons.notifications_off_outlined,
-            title: 'No active alerts',
+            title: 'No active forecast alerts',
             message:
-                'Monitoring is active across markets and portfolios. New risk events will appear here in real time.',
+                'Monitoring is active across markets, resolution windows, and risk controls.',
           );
         }
 
         return EnterpriseDataTable<AppNotification>(
-          title: 'Live Alerts Queue',
-          subtitle: 'Prioritized by severity for the trading and risk desks.',
+          title: 'Forecast Alert Queue',
+          subtitle:
+              'Prioritized by severity for forecasting, risk, and resolution desks.',
           rows: alerts,
           rowId: (row) => '${row.level}-${row.message.hashCode}',
           searchHint: 'Search alerts',
@@ -295,10 +328,10 @@ class DashboardScreen extends ConsumerWidget {
             ),
             EnterpriseTableColumn(
               label: 'Desk',
-              width: 110,
+              width: 130,
               cell: (row) => row.level.toLowerCase().contains('critical')
-                  ? 'Risk'
-                  : 'Trading',
+                  ? 'Risk Intelligence'
+                  : 'Forecasting',
               sortValue: (row) => row.level,
             ),
           ],
@@ -309,19 +342,20 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _executionPanel(List<_ExecutionRow> rows) {
+  Widget _settlementPanel(List<_SettlementRow> rows) {
     if (rows.isEmpty) {
       return const EmptyStateCard(
         icon: Icons.receipt_long_outlined,
-        title: 'No recent executions',
+        title: 'No recent settlements',
         message:
-            'Execution feed will populate after the first confirmed trade settlement.',
+            'Settlement feed will populate after new forecast positions move through on-chain confirmation.',
       );
     }
 
-    return EnterpriseDataTable<_ExecutionRow>(
-      title: 'Recent Executions',
-      subtitle: 'Settlement outcomes and slippage audit by trade ticket.',
+    return EnterpriseDataTable<_SettlementRow>(
+      title: 'Recent Position Settlements',
+      subtitle:
+          'On-chain confirmation outcomes, latency, and slippage audit trail.',
       rows: rows,
       rowId: (row) => row.ticket,
       searchHint: 'Search ticket or market',
@@ -344,19 +378,19 @@ class DashboardScreen extends ConsumerWidget {
         ),
         EnterpriseTableColumn(
           label: 'Market',
-          width: 190,
+          width: 210,
           cell: (row) => row.market,
           sortValue: (row) => row.market,
         ),
         EnterpriseTableColumn(
-          label: 'Side',
-          width: 70,
+          label: 'Position',
+          width: 95,
           cell: (row) => row.side,
           sortValue: (row) => row.side,
         ),
         EnterpriseTableColumn(
-          label: 'Notional',
-          width: 105,
+          label: 'Amount',
+          width: 115,
           numeric: true,
           cell: (row) => formatUsd(row.notional),
           sortValue: (row) => row.notional,
@@ -385,7 +419,7 @@ class DashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            'Execution venue ${row.venue} • Slippage ${row.slippageBps} bps • ${row.timestamp}',
+            'Consensus shift ${row.consensusShift.toStringAsFixed(1)}% • Slippage ${row.slippageBps} bps • ${row.timestamp}',
             style: const TextStyle(color: AetherColors.muted),
           ),
         ],
@@ -393,19 +427,20 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  List<_ExecutionRow> _buildExecutionFeed(List<PortfolioPosition> positions) {
+  List<_SettlementRow> _buildSettlementFeed(List<PortfolioPosition> positions) {
     final now = DateTime.now().toUtc();
     return [
       for (var i = 0; i < min(positions.length, 10); i++)
-        _ExecutionRow(
-          ticket: 'TRD-${4200 + i}',
+        _SettlementRow(
+          ticket: 'FC-${4200 + i}',
           market: positions[i].marketTitle,
-          side: positions[i].side,
+          side: 'Predict ${positions[i].side.toUpperCase()}',
           notional: positions[i].size * positions[i].markPrice,
           status: i % 4 == 0 ? 'Pending' : 'Settled',
           latencyMs: 740 + (i * 61),
-          venue: i.isEven ? 'HashKey L2' : 'Cross-router',
           slippageBps: 4 + (i % 5),
+          consensusShift:
+              (positions[i].markPrice - positions[i].avgPrice) * 100,
           timestamp: now.subtract(Duration(minutes: i * 9)).toIso8601String(),
         ),
     ];
@@ -413,22 +448,23 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _errorCard(String message) {
     return EnterprisePanel(
-      title: 'Unable to load overview',
-      child: Text(message, style: const TextStyle(color: AetherColors.critical)),
+      title: 'Unable to load forecast overview',
+      child:
+          Text(message, style: const TextStyle(color: AetherColors.critical)),
     );
   }
 }
 
-class _ExecutionRow {
-  const _ExecutionRow({
+class _SettlementRow {
+  const _SettlementRow({
     required this.ticket,
     required this.market,
     required this.side,
     required this.notional,
     required this.status,
     required this.latencyMs,
-    required this.venue,
     required this.slippageBps,
+    required this.consensusShift,
     required this.timestamp,
   });
 
@@ -438,7 +474,7 @@ class _ExecutionRow {
   final double notional;
   final String status;
   final int latencyMs;
-  final String venue;
   final int slippageBps;
+  final double consensusShift;
   final String timestamp;
 }

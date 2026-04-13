@@ -24,12 +24,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Settings',
-      subtitle: 'Workspace, security, and operational preferences for institutional deployment.',
+      subtitle:
+          'Workspace, security, and forecasting preferences for institutional prediction operations.',
       child: ListView(
         children: [
           EnterprisePanel(
             title: 'Workspace Preferences',
-            subtitle: 'Regional and execution behavior defaults.',
+            subtitle: 'Regional and forecasting behavior defaults.',
             child: Column(
               children: [
                 DropdownButtonFormField<String>(
@@ -37,8 +38,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: const InputDecoration(labelText: 'Timezone'),
                   items: const [
                     DropdownMenuItem(value: 'UTC', child: Text('UTC')),
-                    DropdownMenuItem(value: 'America/New_York', child: Text('America/New_York')),
-                    DropdownMenuItem(value: 'Asia/Singapore', child: Text('Asia/Singapore')),
+                    DropdownMenuItem(
+                        value: 'America/New_York',
+                        child: Text('America/New_York')),
+                    DropdownMenuItem(
+                        value: 'Asia/Singapore', child: Text('Asia/Singapore')),
                   ],
                   onChanged: (value) {
                     if (value == null) return;
@@ -50,7 +54,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _autoHedge,
                   onChanged: (value) => setState(() => _autoHedge = value),
                   title: const Text('Enable auto-hedge recommendations'),
-                  subtitle: const Text('Automatically stage hedge suggestions in Risk and Trading workflows.'),
+                  subtitle: const Text(
+                      'Automatically stage hedge suggestions in Risk Intelligence and position workflows.'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ],
@@ -65,22 +70,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   value: _deskAlerts,
                   onChanged: (value) => setState(() => _deskAlerts = value),
-                  title: const Text('Desk execution alerts'),
-                  subtitle: const Text('Execution fills, rejects, and settlement updates.'),
+                  title: const Text('Forecast desk alerts'),
+                  subtitle: const Text(
+                      'Position opens, closes, and settlement updates.'),
                   contentPadding: EdgeInsets.zero,
                 ),
                 SwitchListTile(
                   value: _riskEscalations,
-                  onChanged: (value) => setState(() => _riskEscalations = value),
+                  onChanged: (value) =>
+                      setState(() => _riskEscalations = value),
                   title: const Text('Risk escalation alerts'),
-                  subtitle: const Text('Notify when risk limits approach breach thresholds.'),
+                  subtitle: const Text(
+                      'Notify when confidence volatility or risk limits approach breach thresholds.'),
                   contentPadding: EdgeInsets.zero,
                 ),
                 SwitchListTile(
                   value: _pushNotifications,
-                  onChanged: (value) => setState(() => _pushNotifications = value),
+                  onChanged: (value) =>
+                      setState(() => _pushNotifications = value),
                   title: const Text('Push notifications'),
-                  subtitle: const Text('Mobile push notifications for critical incidents.'),
+                  subtitle: const Text(
+                      'Mobile push notifications for critical incidents.'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ],
@@ -96,7 +106,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _require2fa,
                   onChanged: (value) => setState(() => _require2fa = value),
                   title: const Text('Require 2FA for privileged actions'),
-                  subtitle: const Text('Applies to withdrawals, vault subscriptions, and critical settings changes.'),
+                  subtitle: const Text(
+                      'Applies to withdrawals, vault allocations, and critical settings changes.'),
                   contentPadding: EdgeInsets.zero,
                 ),
                 const SizedBox(height: AetherSpacing.sm),

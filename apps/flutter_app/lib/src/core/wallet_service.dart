@@ -59,7 +59,8 @@ class WalletService {
     final session = await connection.session.future;
     _session = session;
     final accounts = session.namespaces['eip155']?.accounts;
-    final account = accounts != null && accounts.isNotEmpty ? accounts.first : null;
+    final account =
+        accounts != null && accounts.isNotEmpty ? accounts.first : null;
     if (account == null) {
       throw StateError('Wallet connected without an account address.');
     }

@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 class AppConfig {
-  static const walletConnectProjectId = String.fromEnvironment('WALLETCONNECT_PROJECT_ID', defaultValue: '');
+  static const walletConnectProjectId =
+      String.fromEnvironment('WALLETCONNECT_PROJECT_ID', defaultValue: '');
   static const explorerBaseUrl = String.fromEnvironment(
     'EXPLORER_URL',
     defaultValue: 'https://explorer.hashkeychain.example',
@@ -18,7 +19,8 @@ class AppConfig {
   }
 
   static String get wsMarketsUrl {
-    const configured = String.fromEnvironment('WS_MARKETS_URL', defaultValue: '');
+    const configured =
+        String.fromEnvironment('WS_MARKETS_URL', defaultValue: '');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb) {
       final origin = _webBackendOrigin();
@@ -40,7 +42,8 @@ class AppConfig {
   }
 
   static String get wsVaultsUrl {
-    const configured = String.fromEnvironment('WS_VAULTS_URL', defaultValue: '');
+    const configured =
+        String.fromEnvironment('WS_VAULTS_URL', defaultValue: '');
     if (configured.isNotEmpty) return configured;
     if (kIsWeb) {
       final origin = _webBackendOrigin();

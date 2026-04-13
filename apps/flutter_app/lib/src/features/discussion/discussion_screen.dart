@@ -18,8 +18,10 @@ class DiscussionScreen extends ConsumerWidget {
           itemCount: items.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (_, index) => GlassCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(items[index].author, style: const TextStyle(fontWeight: FontWeight.bold)),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(items[index].author,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(items[index].content),
               const SizedBox(height: 8),

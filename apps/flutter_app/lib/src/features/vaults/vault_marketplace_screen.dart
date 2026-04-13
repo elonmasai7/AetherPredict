@@ -25,11 +25,13 @@ class VaultMarketplaceScreen extends ConsumerWidget {
     final vaultsValue = ref.watch(vaultProvider);
 
     return AppScaffold(
-      title: 'Vaults',
-      subtitle: 'Managed strategy vaults with transparent risk and performance controls.',
+      title: 'Liquidity Vaults',
+      subtitle:
+          'Forecast Strategy Vaults with transparent risk controls, thin-market support, and autonomous rebalancing.',
       child: vaultsValue.when(
         data: (vaults) {
-          final totalAum = vaults.fold<double>(0, (sum, item) => sum + item.totalAum);
+          final totalAum =
+              vaults.fold<double>(0, (sum, item) => sum + item.totalAum);
           final avgRoi30d = vaults.isEmpty
               ? 0
               : vaults.map((item) => item.roi30d).reduce((a, b) => a + b) /
@@ -43,7 +45,8 @@ class VaultMarketplaceScreen extends ConsumerWidget {
             children: [
               KpiStrip(
                 items: [
-                  KpiStripItem(label: 'Active Vaults', value: vaults.length.toString()),
+                  KpiStripItem(
+                      label: 'Active Vaults', value: vaults.length.toString()),
                   KpiStripItem(label: 'Total AUM', value: formatUsd(totalAum)),
                   KpiStripItem(
                     label: 'Average ROI 30D',
@@ -59,17 +62,19 @@ class VaultMarketplaceScreen extends ConsumerWidget {
               if (vaults.isEmpty)
                 const EmptyStateCard(
                   icon: Icons.account_balance_outlined,
-                  title: 'No vault strategies available',
+                  title: 'No forecast strategy vaults available',
                   message:
-                      'There are currently no vaults published. Retry after strategy deployment windows.',
+                      'There are currently no liquidity vaults published. Retry after strategy deployment windows.',
                 )
               else
                 EnterpriseDataTable<VaultModel>(
-                  title: 'Vault Directory',
-                  subtitle: 'Compare strategy outcomes, manager model, and risk posture.',
+                  title: 'Forecast Strategy Vault Directory',
+                  subtitle:
+                      'Compare strategy outcomes, manager model, event liquidity posture, and confidence alignment.',
                   rows: vaults,
                   rowId: (row) => row.id.toString(),
-                  searchHint: 'Search vault title, manager type, or risk profile',
+                  searchHint:
+                      'Search vault title, manager type, or risk profile',
                   filters: [
                     EnterpriseTableFilter(
                       label: 'AI Managed',
@@ -77,7 +82,8 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                     ),
                     EnterpriseTableFilter(
                       label: 'Low Risk',
-                      predicate: (row) => row.riskProfile.toLowerCase().contains('low'),
+                      predicate: (row) =>
+                          row.riskProfile.toLowerCase().contains('low'),
                     ),
                     EnterpriseTableFilter(
                       label: 'High Subscribers',
@@ -86,7 +92,7 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                   ],
                   columns: [
                     EnterpriseTableColumn(
-                      label: 'Vault',
+                      label: 'Vault Strategy',
                       width: 260,
                       cell: (row) => row.title,
                       sortValue: (row) => row.title,
@@ -107,25 +113,28 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                       label: 'ROI 30D',
                       width: 95,
                       numeric: true,
-                      cell: (row) => '${(row.roi30d * 100).toStringAsFixed(1)}%',
+                      cell: (row) =>
+                          '${(row.roi30d * 100).toStringAsFixed(1)}%',
                       sortValue: (row) => row.roi30d,
                     ),
                     EnterpriseTableColumn(
                       label: 'Win Rate',
                       width: 95,
                       numeric: true,
-                      cell: (row) => '${(row.winRate * 100).toStringAsFixed(1)}%',
+                      cell: (row) =>
+                          '${(row.winRate * 100).toStringAsFixed(1)}%',
                       sortValue: (row) => row.winRate,
                     ),
                     EnterpriseTableColumn(
                       label: 'Volatility',
                       width: 95,
                       numeric: true,
-                      cell: (row) => '${(row.volatility * 100).toStringAsFixed(1)}%',
+                      cell: (row) =>
+                          '${(row.volatility * 100).toStringAsFixed(1)}%',
                       sortValue: (row) => row.volatility,
                     ),
                     EnterpriseTableColumn(
-                      label: 'AUM',
+                      label: 'Liquidity AUM',
                       width: 120,
                       numeric: true,
                       cell: (row) => formatUsd(row.totalAum),
@@ -139,7 +148,8 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                         spacing: AetherSpacing.sm,
                         runSpacing: AetherSpacing.sm,
                         children: [
-                          StatusBadge(label: '${row.activeSubscribers} subscribers'),
+                          StatusBadge(
+                              label: '${row.activeSubscribers} subscribers'),
                           StatusBadge(
                             label: row.status,
                             color: row.status.toLowerCase() == 'active'
@@ -152,7 +162,7 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                       Text(row.strategyDescription),
                       const SizedBox(height: AetherSpacing.sm),
                       Text(
-                        'Target markets: ${row.targetMarkets.take(4).join(', ')}',
+                        'Target prediction markets: ${row.targetMarkets.take(4).join(', ')}',
                         style: const TextStyle(color: AetherColors.muted),
                       ),
                     ],
@@ -164,7 +174,7 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                       icon: const Icon(Icons.open_in_new, size: 18),
                     ),
                     IconButton(
-                      tooltip: 'Subscribe',
+                      tooltip: 'Allocate liquidity',
                       onPressed: () => _openSubscribeDialog(context, row),
                       icon: const Icon(Icons.play_arrow_rounded, size: 18),
                     ),
@@ -175,7 +185,7 @@ class VaultMarketplaceScreen extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => EnterprisePanel(
-          title: 'Unable to load vault directory',
+          title: 'Unable to load forecast strategy vault directory',
           child: Text(
             error.toString(),
             style: const TextStyle(color: AetherColors.critical),
@@ -185,7 +195,8 @@ class VaultMarketplaceScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _openSubscribeDialog(BuildContext context, VaultModel vault) async {
+  Future<void> _openSubscribeDialog(
+      BuildContext context, VaultModel vault) async {
     await showDialog<void>(
       context: context,
       builder: (_) => _VaultSubscribeDialog(vault: vault),
@@ -215,7 +226,7 @@ class _VaultSubscribeDialogState extends State<_VaultSubscribeDialog> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: EnterprisePanel(
-          title: 'Vault Subscription Workflow',
+          title: 'Forecast Strategy Vault Allocation Workflow',
           subtitle: widget.vault.title,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -226,7 +237,8 @@ class _VaultSubscribeDialogState extends State<_VaultSubscribeDialog> {
               _body(),
               if (_error != null) ...[
                 const SizedBox(height: AetherSpacing.sm),
-                Text(_error!, style: const TextStyle(color: AetherColors.critical)),
+                Text(_error!,
+                    style: const TextStyle(color: AetherColors.critical)),
               ],
               const SizedBox(height: AetherSpacing.lg),
               Row(
@@ -258,7 +270,7 @@ class _VaultSubscribeDialogState extends State<_VaultSubscribeDialog> {
       'Review',
       'Allocate',
       'Sign',
-      'Subscribed',
+      'Active',
     ];
 
     return Wrap(
@@ -306,10 +318,14 @@ class _VaultSubscribeDialogState extends State<_VaultSubscribeDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _metricRow('ROI 7D', '${(widget.vault.roi7d * 100).toStringAsFixed(2)}%'),
-        _metricRow('ROI 30D', '${(widget.vault.roi30d * 100).toStringAsFixed(2)}%'),
-        _metricRow('Win Rate', '${(widget.vault.winRate * 100).toStringAsFixed(2)}%'),
-        _metricRow('Volatility', '${(widget.vault.volatility * 100).toStringAsFixed(2)}%'),
+        _metricRow(
+            'ROI 7D', '${(widget.vault.roi7d * 100).toStringAsFixed(2)}%'),
+        _metricRow(
+            'ROI 30D', '${(widget.vault.roi30d * 100).toStringAsFixed(2)}%'),
+        _metricRow(
+            'Win Rate', '${(widget.vault.winRate * 100).toStringAsFixed(2)}%'),
+        _metricRow('Volatility',
+            '${(widget.vault.volatility * 100).toStringAsFixed(2)}%'),
       ],
     );
   }
@@ -330,7 +346,7 @@ class _VaultSubscribeDialogState extends State<_VaultSubscribeDialog> {
         ),
         const SizedBox(height: AetherSpacing.sm),
         Text(
-          'Estimated vault shares ${estShares.toStringAsFixed(2)} (modeled).',
+          'Estimated vault shares ${estShares.toStringAsFixed(2)} (modeled) for event liquidity routing.',
           style: const TextStyle(color: AetherColors.muted),
         ),
       ],
@@ -339,13 +355,13 @@ class _VaultSubscribeDialogState extends State<_VaultSubscribeDialog> {
 
   Widget _bodySign() {
     return const Text(
-      'Subscription intent is prepared. Continue to simulate wallet signature and on-chain confirmation.',
+      'Vault allocation intent is prepared. Continue to simulate wallet signature and on-chain confirmation.',
     );
   }
 
   Widget _bodySubscribed() {
     return Text(
-      'Subscription confirmed for ${widget.vault.title}. Allocation ${formatUsd(_allocation)} is now active.',
+      'Vault allocation confirmed for ${widget.vault.title}. Event liquidity allocation ${formatUsd(_allocation)} is now active.',
       style: const TextStyle(color: AetherColors.success),
     );
   }
@@ -355,7 +371,9 @@ class _VaultSubscribeDialogState extends State<_VaultSubscribeDialog> {
       padding: const EdgeInsets.only(bottom: AetherSpacing.sm),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: const TextStyle(color: AetherColors.muted))),
+          Expanded(
+              child: Text(label,
+                  style: const TextStyle(color: AetherColors.muted))),
           Text(value),
         ],
       ),

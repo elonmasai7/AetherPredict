@@ -19,7 +19,7 @@ Future<void> showTradeExecutionModal(BuildContext context,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
               side: const BorderSide(color: AetherColors.border)),
-          title: Text('Prepare $side Trade'),
+          title: Text('Prepare $side Forecast Position'),
           content: SizedBox(
             width: 520,
             child: SingleChildScrollView(
@@ -29,22 +29,22 @@ Future<void> showTradeExecutionModal(BuildContext context,
                   TextField(
                       controller: amount,
                       decoration: const InputDecoration(
-                          labelText: 'Market Order Size (USD)')),
+                          labelText: 'Open Position Size (USD)')),
                   const SizedBox(height: 8),
                   TextField(
                       controller: limit,
                       decoration: const InputDecoration(
-                          labelText: 'Limit Order Price')),
+                          labelText: 'Target Probability (%)')),
                   const SizedBox(height: 8),
                   TextField(
                       controller: sl,
-                      decoration:
-                          const InputDecoration(labelText: 'Stop Loss')),
+                      decoration: const InputDecoration(
+                          labelText: 'Close Forecast Trigger')),
                   const SizedBox(height: 8),
                   TextField(
                       controller: tp,
-                      decoration:
-                          const InputDecoration(labelText: 'Take Profit')),
+                      decoration: const InputDecoration(
+                          labelText: 'Confidence Target')),
                   const SizedBox(height: 8),
                   TextField(
                       controller: slip,
@@ -54,7 +54,7 @@ Future<void> showTradeExecutionModal(BuildContext context,
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Trades now require a connected signing wallet and backend execution wiring. This dialog captures real inputs without inventing a confirmation hash.',
+                      'Forecast positions require a connected signing wallet and backend settlement wiring. This dialog captures real inputs without inventing a confirmation hash.',
                       style: TextStyle(color: AetherColors.muted),
                     ),
                   ),
@@ -73,7 +73,7 @@ Future<void> showTradeExecutionModal(BuildContext context,
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                         content: Text(
-                            'Enter complete trade parameters before continuing.')),
+                            'Enter complete forecast parameters before continuing.')),
                   );
                   return;
                 }
@@ -86,9 +86,9 @@ Future<void> showTradeExecutionModal(BuildContext context,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                         side: const BorderSide(color: AetherColors.border)),
-                    title: const Text('Trade Ready for Signature'),
+                    title: const Text('Forecast Position Ready for Signature'),
                     content: Text(
-                      'Market: $market\nSide: $side\nAmount: ${amount.text}\nLimit: ${limit.text}\n\nNo transaction has been broadcast yet.',
+                      'Event market: $market\nPosition: $side\nAmount: ${amount.text}\nTarget probability: ${limit.text}\n\nNo transaction has been broadcast yet.',
                     ),
                     actions: [
                       FilledButton(
