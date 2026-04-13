@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy import inspect
 
 from app.api import (
@@ -148,4 +149,47 @@ def favicon():
 
 frontend_dist = _resolve_frontend_dist()
 if frontend_dist is not None:
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    class SPAStaticFiles(StaticFiles):
+        # Serve index.html for frontend deep-links while preserving API/asset 404s.
+        _no_fallback_prefixes = (
+            "auth",
+            "blockchain",
+            "chain-tx",
+            "markets",
+            "portfolio",
+            "trades",
+            "ai",
+            "agents",
+            "leaderboard",
+            "bundles",
+            "insurance",
+            "market",
+            "disputes",
+            "notifications",
+            "vaults",
+            "copy-trading",
+            "watchlists",
+            "workspaces",
+            "reports",
+            "ws",
+            "health",
+            "openapi.json",
+            "docs",
+            "redoc",
+        )
+
+        async def get_response(self, path: str, scope):
+            try:
+                return await super().get_response(path, scope)
+            except StarletteHTTPException as ex:
+                if ex.status_code != 404:
+                    raise
+
+                normalized = path.lstrip("/")
+                first_segment = normalized.split("/", 1)[0]
+                if "." in normalized.split("/")[-1] or first_segment in self._no_fallback_prefixes:
+                    raise
+
+                return await super().get_response("index.html", scope)
+
+    app.mount("/", SPAStaticFiles(directory=frontend_dist, html=True), name="frontend")

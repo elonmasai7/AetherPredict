@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models.dart';
+import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/enterprise/enterprise_components.dart';
 
-class ResearchWorkspaceScreen extends StatefulWidget {
+class ResearchWorkspaceScreen extends ConsumerStatefulWidget {
   const ResearchWorkspaceScreen({super.key});
 
   @override
-  State<ResearchWorkspaceScreen> createState() =>
+  ConsumerState<ResearchWorkspaceScreen> createState() =>
       _ResearchWorkspaceScreenState();
 }
 
-class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
+class _ResearchWorkspaceScreenState
+    extends ConsumerState<ResearchWorkspaceScreen> {
   final _thesisController = TextEditingController(
     text: 'Thesis Summary\n'
         '- BTC trend persistence remains supported by ETF net inflows and on-chain participation recovery.\n'
@@ -36,6 +40,10 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedMarket = ref.watch(selectedMarketProvider);
+    final copilotValue = ref.watch(copilotProvider);
+    final sentimentValue = ref.watch(sentimentFeedProvider);
+
     return AppScaffold(
       title: 'Research & Thesis',
       subtitle:
@@ -50,7 +58,7 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
                 const SizedBox(height: AetherSpacing.lg),
                 _editorZone(),
                 const SizedBox(height: AetherSpacing.lg),
-                _insightZone(),
+                _insightZone(selectedMarket, copilotValue, sentimentValue),
               ],
             );
           }
@@ -62,7 +70,11 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
               const SizedBox(width: AetherSpacing.lg),
               Expanded(child: _editorZone()),
               const SizedBox(width: AetherSpacing.lg),
-              SizedBox(width: 360, child: _insightZone()),
+              SizedBox(
+                width: 360,
+                child:
+                    _insightZone(selectedMarket, copilotValue, sentimentValue),
+              ),
             ],
           );
         },
@@ -196,24 +208,18 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
     );
   }
 
-  Widget _insightZone() {
+  Widget _insightZone(
+    AsyncValue<Market> selectedMarket,
+    AsyncValue<CopilotRecommendation> copilotValue,
+    AsyncValue<SentimentFeed> sentimentValue,
+  ) {
     return Column(
       children: [
         EnterprisePanel(
           title: 'AI Insight Snapshot',
           subtitle: 'Current model interpretation and confidence posture.',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              StatusBadge(label: '84% confidence'),
-              SizedBox(height: AetherSpacing.sm),
-              Text(
-                  'Positive factors: ETF flows, participation recovery, implied vol compression.'),
-              SizedBox(height: AetherSpacing.sm),
-              Text(
-                  'Risks: regulatory headline uncertainty, macro liquidity inflection.'),
-            ],
-          ),
+          child:
+              _buildAiInsightSummary(selectedMarket, copilotValue, sentimentValue),
         ),
         const SizedBox(height: AetherSpacing.lg),
         EnterpriseDataTable<_ModelRunRow>(
@@ -263,6 +269,64 @@ class _ResearchWorkspaceScreenState extends State<ResearchWorkspaceScreen> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildAiInsightSummary(
+    AsyncValue<Market> selectedMarket,
+    AsyncValue<CopilotRecommendation> copilotValue,
+    AsyncValue<SentimentFeed> sentimentValue,
+  ) {
+    return selectedMarket.when(
+      data: (market) => copilotValue.when(
+        data: (copilot) => sentimentValue.when(
+          data: (sentiment) {
+            final primaryHeadline = sentiment.newsItems.isEmpty
+                ? 'No recent headline ingest. Sentiment model is running on live market telemetry.'
+                : sentiment.newsItems.first.headline;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: AetherSpacing.sm,
+                  runSpacing: AetherSpacing.sm,
+                  children: [
+                    StatusBadge(label: '${copilot.confidence}% confidence'),
+                    StatusBadge(label: 'Trend ${sentiment.trend}'),
+                    StatusBadge(label: copilot.action.replaceAll('BUY', 'PREDICT')),
+                  ],
+                ),
+                const SizedBox(height: AetherSpacing.sm),
+                Text('Market focus: ${market.title}'),
+                const SizedBox(height: AetherSpacing.sm),
+                Text('Model rationale: ${copilot.reasoning}'),
+                const SizedBox(height: AetherSpacing.sm),
+                Text('Sentiment pulse: $primaryHeadline'),
+                const SizedBox(height: AetherSpacing.sm),
+                Text(
+                  'Confidence shift: ${sentiment.confidenceShift >= 0 ? '+' : ''}${sentiment.confidenceShift} pts',
+                  style: const TextStyle(color: AetherColors.muted),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Text(
+            'Sentiment feed unavailable: $error',
+            style: const TextStyle(color: AetherColors.critical),
+          ),
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Text(
+          'Copilot analysis unavailable: $error',
+          style: const TextStyle(color: AetherColors.critical),
+        ),
+      ),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Text(
+        'Market context unavailable: $error',
+        style: const TextStyle(color: AetherColors.critical),
+      ),
     );
   }
 

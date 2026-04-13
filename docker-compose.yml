@@ -27,6 +27,7 @@ services:
       POSTGRES_HOST: postgres
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/aetherpredict
       REDIS_URL: redis://redis:6379/0
+      AI_SERVICE_URL: http://ai-service:8010
       HASHKEY_RPC_FALLBACKS: "[]"
       VAULT_AUTO_EXECUTE_DEFAULT_SLUGS: "[]"
       VAULT_AUTO_EXECUTE_ALLOWLIST_IDS: "[]"
