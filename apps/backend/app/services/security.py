@@ -2,6 +2,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -17,7 +18,18 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 
+def is_legacy_bcrypt_hash(password_hash: str) -> bool:
+    return password_hash.startswith(("$2a$", "$2b$", "$2y$"))
+
+
 def verify_password(password: str, password_hash: str) -> bool:
+    if is_legacy_bcrypt_hash(password_hash):
+        # Legacy rows may still be bcrypt; verify directly to avoid passlib+bcrypt
+        # compatibility issues in some container builds.
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+        except (ValueError, TypeError):
+            return False
     return pwd_context.verify(password, password_hash)
 
 

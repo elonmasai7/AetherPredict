@@ -46,6 +46,20 @@ AetherPredict is an AI-powered on-chain prediction market on HashKey Chain that 
    - `forge install`
    - `forge test`
 
+## Demo login (local)
+
+- Email: `demo@aetherpredict.ai`
+- Password: `DemoPass123!`
+- If this account does not exist yet, create it once after the backend is running:
+
+```bash
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@aetherpredict.ai","password":"DemoPass123!","display_name":"Demo User"}'
+```
+
+- A `409 Email already registered` response means the demo login is already available and can be used as-is.
+
 ## Database and migrations
 
 - Initialize schema with `cd apps/backend && alembic upgrade head`
