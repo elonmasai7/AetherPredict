@@ -106,30 +106,74 @@ class BlockchainService:
             chain_id=chain_id,
         )
 
+    def _factory_address(self) -> str:
+        return settings.hashkey_prediction_factory_address or settings.hashkey_factory_address
+
+    def _encode_with_fallback(self, contract, methods: list[tuple[str, list[Any]]]) -> tuple[str, str]:
+        for fn_name, args in methods:
+            try:
+                return contract.encodeABI(fn_name=fn_name, args=args), fn_name
+            except Exception:
+                continue
+        names = ", ".join(name for name, _ in methods)
+        raise RuntimeError(f"Contract ABI does not expose any supported method: {names}")
+
+    def _market_uses_native_collateral(self, contract) -> bool:
+        try:
+            collateral = contract.functions.collateralToken().call()
+            return str(collateral).lower() == "0x0000000000000000000000000000000000000000"
+        except Exception:
+            return True
+
     def build_buy_yes(self, market_address: str, wallet_address: str, collateral_wei: int) -> BuiltTransaction:
         contract = self._contract(market_address, "prediction_market")
-        data = contract.encodeABI(fn_name="buy_yes", args=[])
-        return self._build_tx(wallet_address, market_address, data, collateral_wei)
+        prefers_legacy = self._market_uses_native_collateral(contract)
+        methods = [("buy_yes", []), ("buyYes", [collateral_wei])] if prefers_legacy else [("buyYes", [collateral_wei]), ("buy_yes", [])]
+        data, fn_name = self._encode_with_fallback(contract, methods)
+        value = collateral_wei if fn_name == "buy_yes" else 0
+        return self._build_tx(wallet_address, market_address, data, value)
 
     def build_buy_no(self, market_address: str, wallet_address: str, collateral_wei: int) -> BuiltTransaction:
         contract = self._contract(market_address, "prediction_market")
-        data = contract.encodeABI(fn_name="buy_no", args=[])
-        return self._build_tx(wallet_address, market_address, data, collateral_wei)
+        prefers_legacy = self._market_uses_native_collateral(contract)
+        methods = [("buy_no", []), ("buyNo", [collateral_wei])] if prefers_legacy else [("buyNo", [collateral_wei]), ("buy_no", [])]
+        data, fn_name = self._encode_with_fallback(contract, methods)
+        value = collateral_wei if fn_name == "buy_no" else 0
+        return self._build_tx(wallet_address, market_address, data, value)
 
     def build_sell(self, market_address: str, wallet_address: str, yes_side: bool, token_amount_wei: int) -> BuiltTransaction:
         contract = self._contract(market_address, "prediction_market")
-        data = contract.encodeABI(fn_name="sell_position", args=[yes_side, token_amount_wei])
+        data, _ = self._encode_with_fallback(
+            contract,
+            [
+                ("sellPosition", [yes_side, token_amount_wei]),
+                ("sell_position", [yes_side, token_amount_wei]),
+            ],
+        )
         return self._build_tx(wallet_address, market_address, data, 0)
 
     def build_claim(self, market_address: str, wallet_address: str) -> BuiltTransaction:
         contract = self._contract(market_address, "prediction_market")
-        data = contract.encodeABI(fn_name="claim_rewards", args=[])
+        data, _ = self._encode_with_fallback(
+            contract,
+            [
+                ("claimWinnings", []),
+                ("claim_rewards", []),
+            ],
+        )
         return self._build_tx(wallet_address, market_address, data, 0)
 
     def build_dispute(self, market_address: str, wallet_address: str, evidence_uri: str, stake_wei: int) -> BuiltTransaction:
         contract = self._contract(market_address, "prediction_market")
-        data = contract.encodeABI(fn_name="dispute_outcome", args=[evidence_uri])
-        return self._build_tx(wallet_address, market_address, data, stake_wei)
+        prefers_legacy = self._market_uses_native_collateral(contract)
+        methods = (
+            [("dispute_outcome", [evidence_uri]), ("disputeOutcome", [evidence_uri, stake_wei])]
+            if prefers_legacy
+            else [("disputeOutcome", [evidence_uri, stake_wei]), ("dispute_outcome", [evidence_uri])]
+        )
+        data, fn_name = self._encode_with_fallback(contract, methods)
+        value = stake_wei if fn_name == "dispute_outcome" else 0
+        return self._build_tx(wallet_address, market_address, data, value)
 
     def build_create_market(
         self,
@@ -140,14 +184,18 @@ class BlockchainService:
         expiry: int,
         creation_fee_wei: int,
     ) -> BuiltTransaction:
-        if not settings.hashkey_factory_address:
-            raise RuntimeError("HASHKEY_FACTORY_ADDRESS must be configured.")
-        factory = self._contract(settings.hashkey_factory_address, "market_factory")
-        data = factory.encodeABI(
-            fn_name="create_market",
-            args=[title, description, oracle_source, expiry],
+        factory_address = self._factory_address()
+        if not factory_address:
+            raise RuntimeError("HASHKEY_FACTORY_ADDRESS or HASHKEY_PREDICTION_FACTORY_ADDRESS must be configured.")
+        factory = self._contract(factory_address, "market_factory")
+        data, _ = self._encode_with_fallback(
+            factory,
+            [
+                ("createMarket", [title, description, oracle_source, expiry]),
+                ("create_market", [title, description, oracle_source, expiry]),
+            ],
         )
-        return self._build_tx(wallet_address, settings.hashkey_factory_address, data, creation_fee_wei)
+        return self._build_tx(wallet_address, factory_address, data, creation_fee_wei)
 
     def build_create_vault(
         self,
@@ -289,7 +337,10 @@ class BlockchainService:
         return events
 
     def parse_factory_events(self, receipt: dict) -> list[dict]:
-        factory = self._contract(settings.hashkey_factory_address, "market_factory")
+        factory_address = self._factory_address()
+        if not factory_address:
+            raise RuntimeError("HASHKEY_FACTORY_ADDRESS or HASHKEY_PREDICTION_FACTORY_ADDRESS must be configured.")
+        factory = self._contract(factory_address, "market_factory")
         events = []
         for log in factory.events.MarketCreated().process_receipt(receipt):
             events.append(

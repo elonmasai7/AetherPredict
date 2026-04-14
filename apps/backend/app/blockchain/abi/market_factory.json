@@ -6,6 +6,18 @@
       { "internalType": "string", "name": "oracleSource", "type": "string" },
       { "internalType": "uint256", "name": "expiryDate", "type": "uint256" }
     ],
+    "name": "createMarket",
+    "outputs": [{ "internalType": "address", "name": "marketAddress", "type": "address" }],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "string", "name": "title", "type": "string" },
+      { "internalType": "string", "name": "description", "type": "string" },
+      { "internalType": "string", "name": "oracleSource", "type": "string" },
+      { "internalType": "uint256", "name": "expiryDate", "type": "uint256" }
+    ],
     "name": "create_market",
     "outputs": [{ "internalType": "address", "name": "marketAddress", "type": "address" }],
     "stateMutability": "payable",

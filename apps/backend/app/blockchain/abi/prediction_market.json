@@ -1,5 +1,23 @@
 [
   {
+    "inputs": [
+      { "internalType": "uint256", "name": "collateralAmount", "type": "uint256" }
+    ],
+    "name": "buyYes",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "collateralAmount", "type": "uint256" }
+    ],
+    "name": "buyNo",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "buy_yes",
     "outputs": [],
@@ -18,7 +36,24 @@
       { "internalType": "bool", "name": "yesSide", "type": "bool" },
       { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" }
     ],
+    "name": "sellPosition",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bool", "name": "yesSide", "type": "bool" },
+      { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" }
+    ],
     "name": "sell_position",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "claimWinnings",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -32,11 +67,65 @@
   },
   {
     "inputs": [
+      { "internalType": "string", "name": "evidenceUri", "type": "string" },
+      { "internalType": "uint256", "name": "stakeAmount", "type": "uint256" }
+    ],
+    "name": "disputeOutcome",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       { "internalType": "string", "name": "evidenceUri", "type": "string" }
     ],
     "name": "dispute_outcome",
     "outputs": [],
     "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "confidenceScore", "type": "uint256" },
+      { "internalType": "string", "name": "evidenceUri", "type": "string" }
+    ],
+    "name": "settleYes",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "confidenceScore", "type": "uint256" },
+      { "internalType": "string", "name": "evidenceUri", "type": "string" }
+    ],
+    "name": "settleNo",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bool", "name": "outcomeYes", "type": "bool" },
+      { "internalType": "uint256", "name": "confidenceScore", "type": "uint256" }
+    ],
+    "name": "resolve_market",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "finalizeSettlement",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "collateralToken",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
     "type": "function"
   },
   {
