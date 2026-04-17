@@ -6,173 +6,194 @@ import {Test} from "forge-std/Test.sol";
 import {AETHToken} from "../src/AETHToken.sol";
 import {GovernanceStaking} from "../src/GovernanceStaking.sol";
 import {LiquidityVault} from "../src/LiquidityVault.sol";
-import {MockERC20} from "../src/MockERC20.sol";
 import {OutcomeToken} from "../src/OutcomeToken.sol";
 import {OutcomeTokenFactory} from "../src/OutcomeTokenFactory.sol";
 import {PredictionMarket} from "../src/PredictionMarket.sol";
 import {PredictionMarketFactory} from "../src/PredictionMarketFactory.sol";
+import {MockERC20} from "../src/MockERC20.sol";
 
 contract MarketFactoryTest is Test {
-    address internal traderYes = address(0xBEEF);
-    address internal traderNo = address(0xCAFE);
-    address internal lp = address(0xF00D);
-
-    MockERC20 internal collateral;
     AETHToken internal aeth;
+    GovernanceStaking internal governanceStaking;
+    LiquidityVault internal liquidityVault;
     OutcomeTokenFactory internal outcomeFactory;
     PredictionMarketFactory internal factory;
-    GovernanceStaking internal staking;
-    LiquidityVault internal liquidityVault;
+    MockERC20 internal usdc;
+
+    address internal trader = address(0xBEEF);
+    address internal lp = address(0xCAFE);
+    address internal disputer = address(0xD15E);
+    address internal feeCollector = address(0xFEE1);
 
     function setUp() public {
-        collateral = new MockERC20("Mock USD", "mUSD", 18);
+        usdc = new MockERC20("USD Coin", "USDC", 18);
         aeth = new AETHToken(address(this), address(this), 100_000_000 ether);
         outcomeFactory = new OutcomeTokenFactory(address(this));
+        governanceStaking = new GovernanceStaking(address(this), address(aeth), address(this));
+        liquidityVault = new LiquidityVault(address(this), address(usdc), address(aeth));
 
         factory = new PredictionMarketFactory(
             address(this),
             address(outcomeFactory),
-            address(collateral),
-            0,
-            address(this)
+            address(usdc),
+            0.01 ether,
+            feeCollector
         );
-        factory.setDefaultMinDisputeStake(1 ether);
 
-        outcomeFactory.grantRole(outcomeFactory.FACTORY_OPERATOR_ROLE(), address(factory));
+        factory.setDefaultProtocolFeeBps(0);
+        factory.setDefaultDisputeWindow(1 hours);
+        factory.setDefaultMinDisputeStake(10 ether);
+        factory.setGovernanceStaking(address(governanceStaking));
+        factory.setLiquidityVault(address(liquidityVault));
 
-        staking = new GovernanceStaking(address(this), address(aeth), address(this));
-        liquidityVault = new LiquidityVault(address(this), address(collateral), address(aeth));
+        outcomeFactory.grantRole(outcomeFactory.MARKET_FACTORY_ROLE(), address(factory));
+        governanceStaking.grantRole(governanceStaking.MARKET_REGISTRAR_ROLE(), address(factory));
 
-        collateral.mint(traderYes, 10_000 ether);
-        collateral.mint(traderNo, 10_000 ether);
-        collateral.mint(lp, 10_000 ether);
-
-        aeth.transfer(traderYes, 2_000 ether);
-        aeth.transfer(traderNo, 2_000 ether);
+        usdc.mint(trader, 1_000_000 ether);
+        usdc.mint(lp, 1_000_000 ether);
+        aeth.transfer(disputer, 10_000 ether);
+        aeth.transfer(lp, 10_000 ether);
     }
 
-    function testPredictionMarketLifecycleWithSettlement() public {
-        address marketAddress = factory.create_market(
-            "BTC_120K",
-            "Will BTC exceed 120k?",
-            "HashKey Oracle",
+    function testMarketLifecycleErc20Collateral() public {
+        address marketAddress = factory.createMarket{value: 0.01 ether}(
+            "BTC > 120k",
+            "Market description",
+            "hashkey:oracle:btc",
             block.timestamp + 1 days
         );
 
-        PredictionMarket market = PredictionMarket(marketAddress);
-        OutcomeToken yesToken = OutcomeToken(address(market.yesToken()));
+        PredictionMarket market = PredictionMarket(payable(marketAddress));
+        OutcomeToken yesToken = market.yesToken();
 
-        vm.startPrank(traderYes);
-        collateral.approve(marketAddress, 1_000 ether);
-        market.buyYes(1_000 ether);
-        assertEq(yesToken.balanceOf(traderYes), 997 ether);
+        vm.startPrank(trader);
+        usdc.approve(marketAddress, type(uint256).max);
+        market.buyYes(100 ether);
 
-        market.sellPosition(true, 200 ether);
-        assertEq(yesToken.balanceOf(traderYes), 797 ether);
+        assertEq(yesToken.balanceOf(trader), 100 ether);
+        assertEq(market.yesPool(), 100 ether);
+
+        market.sellPosition(true, 40 ether);
+        assertEq(yesToken.balanceOf(trader), 60 ether);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 2 days);
-        market.resolve_market(true, 9500);
+        market.settleYes(9200, "ipfs://resolution/1");
+        vm.warp(block.timestamp + 2 hours);
+        market.finalizeSettlement();
 
-        uint256 balanceBefore = collateral.balanceOf(traderYes);
-        vm.prank(traderYes);
+        uint256 beforeBalance = usdc.balanceOf(trader);
+        vm.prank(trader);
         market.claimWinnings();
-        uint256 balanceAfter = collateral.balanceOf(traderYes);
 
-        assertEq(balanceAfter - balanceBefore, 797 ether);
-        assertEq(yesToken.balanceOf(traderYes), 0);
+        assertEq(usdc.balanceOf(trader), beforeBalance + 60 ether);
+        assertEq(yesToken.balanceOf(trader), 0);
     }
 
-    function testDisputeFlowAndFinalizationHook() public {
-        address marketAddress = factory.create_market(
-            "ETH_10K",
-            "Will ETH exceed 10k?",
-            "HashKey Oracle",
+    function testDisputeStakeFlowAndFinalizeDispute() public {
+        address marketAddress = factory.createMarket{value: 0.01 ether}(
+            "ETH > 10k",
+            "Market description",
+            "hashkey:oracle:eth",
             block.timestamp + 1 days
         );
 
-        PredictionMarket market = PredictionMarket(marketAddress);
-        OutcomeToken noToken = OutcomeToken(address(market.noToken()));
+        PredictionMarket market = PredictionMarket(payable(marketAddress));
+        OutcomeToken noToken = market.noToken();
 
-        vm.startPrank(traderNo);
-        collateral.approve(marketAddress, 1_200 ether);
-        market.buyNo(1_200 ether);
+        vm.startPrank(trader);
+        usdc.approve(marketAddress, type(uint256).max);
+        market.buyNo(50 ether);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 2 days);
-        market.settleYes(8100, "ipfs://initial");
-        vm.deal(traderNo, 2 ether);
+        market.settleYes(8500, "ipfs://resolution/proposed");
 
-        vm.startPrank(traderNo);
-        collateral.approve(marketAddress, 20 ether);
-        market.disputeOutcome{value: 1 ether}("ipfs://counter-evidence", 20 ether);
+        vm.startPrank(disputer);
+        aeth.approve(address(governanceStaking), type(uint256).max);
+        market.disputeOutcome("ipfs://evidence/dispute-1", 10 ether);
         vm.stopPrank();
 
-        vm.expectRevert("Already proposed");
-        market.settleYes(8200, "ipfs://another");
+        assertTrue(market.disputed());
 
-        market.finalizeDispute(false, 9000, "governance-overturn");
+        vm.startPrank(lp);
+        aeth.approve(address(governanceStaking), type(uint256).max);
+        governanceStaking.stake(500 ether);
+        governanceStaking.voteDispute(1, true);
+        vm.stopPrank();
 
-        uint256 beforeClaim = collateral.balanceOf(traderNo);
-        vm.prank(traderNo);
+        governanceStaking.resolveDispute(1, true);
+        market.finalizeDispute(false, 8800, "appeal-accepted");
+
+        uint256 beforeBalance = usdc.balanceOf(trader);
+        vm.prank(trader);
         market.claimWinnings();
-        uint256 afterClaim = collateral.balanceOf(traderNo);
 
-        assertEq(noToken.balanceOf(traderNo), 0);
-        assertEq(afterClaim - beforeClaim, (1_200 ether * (10_000 - 30)) / 10_000);
+        assertEq(usdc.balanceOf(trader), beforeBalance + 50 ether);
+        assertEq(noToken.balanceOf(trader), 0);
     }
 
     function testLiquidityAndStakingRewardsSurface() public {
         vm.startPrank(lp);
-        collateral.approve(address(liquidityVault), 2_000 ether);
-        liquidityVault.deposit(2_000 ether);
+        usdc.approve(address(liquidityVault), type(uint256).max);
+        liquidityVault.deposit(200 ether);
         vm.stopPrank();
 
-        collateral.mint(address(this), 500 ether);
-        collateral.approve(address(liquidityVault), 500 ether);
-        liquidityVault.distributeFees(500 ether);
+        usdc.mint(address(this), 30 ether);
+        usdc.approve(address(liquidityVault), type(uint256).max);
+        liquidityVault.distributeFees(30 ether);
 
-        aeth.approve(address(liquidityVault), 1_000 ether);
-        liquidityVault.distributeAethRewards(1_000 ether);
+        aeth.approve(address(liquidityVault), type(uint256).max);
+        liquidityVault.distributeAethRewards(20 ether);
 
-        uint256 feeBefore = collateral.balanceOf(lp);
-        uint256 rewardBefore = aeth.balanceOf(lp);
+        uint256 lpBeforeUsdc = usdc.balanceOf(lp);
+        uint256 lpBeforeAeth = aeth.balanceOf(lp);
 
         vm.prank(lp);
         liquidityVault.claimRewards();
 
-        uint256 feeAfter = collateral.balanceOf(lp);
-        uint256 rewardAfter = aeth.balanceOf(lp);
+        assertGt(usdc.balanceOf(lp), lpBeforeUsdc);
+        assertGt(aeth.balanceOf(lp), lpBeforeAeth);
 
-        assertGt(feeAfter, feeBefore);
-        assertGt(rewardAfter, rewardBefore);
-
-        vm.startPrank(traderYes);
-        aeth.approve(address(staking), 500 ether);
-        staking.stake(500 ether);
+        vm.startPrank(lp);
+        aeth.approve(address(governanceStaking), type(uint256).max);
+        governanceStaking.stake(200 ether);
         vm.stopPrank();
 
-        vm.startPrank(traderNo);
-        aeth.approve(address(staking), 300 ether);
-        staking.stake(300 ether);
-        vm.stopPrank();
+        aeth.approve(address(governanceStaking), type(uint256).max);
+        governanceStaking.fundRewards(100 ether);
 
-        vm.startPrank(traderYes);
-        aeth.approve(address(staking), 100 ether);
-        uint256 disputeId = staking.submitDispute(address(0xABCD), "ipfs://dispute", 100 ether);
-        vm.stopPrank();
+        uint256 stakingBefore = aeth.balanceOf(lp);
+        vm.prank(lp);
+        governanceStaking.claimRewards();
 
-        vm.prank(traderNo);
-        staking.voteDispute(disputeId, true);
+        assertGt(aeth.balanceOf(lp), stakingBefore);
+    }
 
-        aeth.approve(address(staking), 200 ether);
-        staking.fundRewards(200 ether);
+    function testLegacyAliasesRemainOperationalForNativeMarkets() public {
+        address marketAddress = factory.createMarket{value: 0.01 ether}(
+            "Native Alias Market",
+            "Legacy path",
+            "hashkey:oracle:native",
+            block.timestamp + 1 days,
+            address(0),
+            "NATIVE_ALIAS",
+            0
+        );
 
-        uint256 stakingRewardBefore = aeth.balanceOf(traderNo);
-        vm.prank(traderNo);
-        staking.claimRewards();
-        uint256 stakingRewardAfter = aeth.balanceOf(traderNo);
+        PredictionMarket market = PredictionMarket(payable(marketAddress));
 
-        assertGt(stakingRewardAfter - stakingRewardBefore, 0);
+        vm.deal(trader, 5 ether);
+        vm.prank(trader);
+        market.buy_yes{value: 1 ether}();
+
+        vm.warp(block.timestamp + 2 days);
+        market.resolve_market(true, 9000);
+
+        uint256 nativeBefore = trader.balance;
+        vm.prank(trader);
+        market.claim_rewards();
+
+        assertEq(trader.balance, nativeBefore + 1 ether);
     }
 }

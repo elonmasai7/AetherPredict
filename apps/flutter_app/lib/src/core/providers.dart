@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 import 'constants.dart';
 import 'models.dart';
+import '../features/strategy_engine/strategy_engine_models.dart';
 import 'wallet_service.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -165,6 +166,20 @@ final discussionProvider = FutureProvider<List<DiscussionComment>>((ref) async {
   final marketId = int.tryParse(market.id) ?? 1;
   return ref.read(apiClientProvider).fetchComments(marketId);
 });
+
+final strategyEngineStateProvider = FutureProvider<StrategyEngineStateModel>(
+    (ref) async => ref.read(apiClientProvider).fetchStrategyEngineState());
+
+final strategyTemplatesProvider = FutureProvider<List<StrategyTemplateModel>>(
+    (ref) async => ref.read(apiClientProvider).fetchStrategyTemplates());
+
+final strategyMonitorProvider =
+    FutureProvider<List<StrategyMonitorLogModel>>(
+        (ref) async => ref.read(apiClientProvider).fetchStrategyMonitor());
+
+final strategyRankingProvider =
+    FutureProvider<List<StrategyRankingEntryModel>>(
+        (ref) async => ref.read(apiClientProvider).fetchStrategyRanking());
 
 class AuthSessionState {
   const AuthSessionState({

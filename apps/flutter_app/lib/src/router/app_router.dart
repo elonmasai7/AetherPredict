@@ -19,6 +19,11 @@ import '../features/risk/risk_dashboard_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/status/status_center_screen.dart';
+import '../features/strategy_engine/automation_monitor_screen.dart';
+import '../features/strategy_engine/my_strategies_screen.dart';
+import '../features/strategy_engine/performance_ranking_screen.dart';
+import '../features/strategy_engine/strategy_ai_builder_screen.dart';
+import '../features/strategy_engine/strategy_templates_screen.dart';
 import '../features/vaults/vault_marketplace_screen.dart';
 
 final appRouter = GoRouter(
@@ -80,6 +85,26 @@ final appRouter = GoRouter(
       path: '/operations',
       builder: (_, __) => const OperationsConsoleScreen(),
     ),
+    GoRoute(
+      path: '/strategy-engine',
+      builder: (_, __) => const MyStrategiesScreen(),
+    ),
+    GoRoute(
+      path: '/strategy-engine/templates',
+      builder: (_, __) => const StrategyTemplatesScreen(),
+    ),
+    GoRoute(
+      path: '/strategy-engine/ai-builder',
+      builder: (_, __) => const StrategyAiBuilderScreen(),
+    ),
+    GoRoute(
+      path: '/strategy-engine/automation-monitor',
+      builder: (_, __) => const AutomationMonitorScreen(),
+    ),
+    GoRoute(
+      path: '/strategy-engine/performance-ranking',
+      builder: (_, __) => const PerformanceRankingScreen(),
+    ),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     GoRoute(
       path: '/dashboard',
@@ -132,6 +157,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/status',
       redirect: (_, __) => '/market-resolution',
+    ),
+    GoRoute(
+      path: '/strategies',
+      redirect: (_, __) => '/strategy-engine',
     ),
   ],
 );

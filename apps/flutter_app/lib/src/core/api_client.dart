@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'constants.dart';
 import 'models.dart';
+import '../features/strategy_engine/strategy_engine_models.dart';
 
 class ApiClient {
   const ApiClient({
@@ -280,6 +281,66 @@ class ApiClient {
     return payload
         .map((item) => DiscussionComment.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<StrategyEngineStateModel> fetchStrategyEngineState() async {
+    final response = await _get('/strategy-engine/state');
+    return StrategyEngineStateModel.fromJson(
+        _decodeMap(response, endpoint: '/strategy-engine/state'));
+  }
+
+  Future<List<StrategyTemplateModel>> fetchStrategyTemplates() async {
+    final response = await _get('/strategy-engine/templates');
+    final payload = _decodeList(response, endpoint: '/strategy-engine/templates');
+    return payload
+        .map((item) =>
+            StrategyTemplateModel.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<StrategyBuildResultModel> buildStrategyFromPrompt(String prompt) async {
+    final response = await _post('/strategy-engine/build', {'prompt': prompt});
+    return StrategyBuildResultModel.fromJson(
+        _decodeMap(response, endpoint: '/strategy-engine/build'));
+  }
+
+  Future<CanonActionResultModel> runCanonCommand(
+      String strategyId, String command) async {
+    final response =
+        await _post('/strategy-engine/strategies/$strategyId/canon/$command', {});
+    return CanonActionResultModel.fromJson(_decodeMap(response,
+        endpoint: '/strategy-engine/strategies/$strategyId/canon/$command'));
+  }
+
+  Future<List<StrategyMonitorLogModel>> fetchStrategyMonitor() async {
+    final response = await _get('/strategy-engine/monitor');
+    final payload =
+        _decodeMap(response, endpoint: '/strategy-engine/monitor')['logs']
+            as List<dynamic>? ??
+            [];
+    return payload
+        .map((item) =>
+            StrategyMonitorLogModel.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<StrategyRankingEntryModel>> fetchStrategyRanking() async {
+    final response = await _get('/strategy-engine/ranking');
+    final payload =
+        _decodeMap(response, endpoint: '/strategy-engine/ranking')['entries']
+            as List<dynamic>? ??
+            [];
+    return payload
+        .map((item) =>
+            StrategyRankingEntryModel.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CanonProjectExportModel> exportStrategyProject(String strategyId) async {
+    final response =
+        await _get('/strategy-engine/strategies/$strategyId/export/manifest');
+    return CanonProjectExportModel.fromJson(_decodeMap(response,
+        endpoint: '/strategy-engine/strategies/$strategyId/export/manifest'));
   }
 
   Stream<LiveMarketUpdate> marketUpdates() {

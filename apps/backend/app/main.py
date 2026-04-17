@@ -24,6 +24,7 @@ from app.api import (
     portfolio,
     copy_trading,
     reports,
+    strategy_engine,
     trades,
     vaults,
     watchlists,
@@ -66,6 +67,7 @@ for route in (
     watchlists.router,
     workspaces.router,
     reports.router,
+    strategy_engine.router,
     ws.router,
 ):
     app.include_router(route)
@@ -171,6 +173,7 @@ if frontend_dist is not None:
             "watchlists",
             "workspaces",
             "reports",
+            "strategy-engine",
             "ws",
             "health",
             "openapi.json",

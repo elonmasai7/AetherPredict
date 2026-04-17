@@ -30,6 +30,8 @@ const _navItems = [
       mobile: true),
   _NavItem('AI Forecast Engine', '/ai-forecast-engine',
       Icons.psychology_alt_rounded),
+  _NavItem(
+      'Strategy Engine', '/strategy-engine', Icons.hub_outlined),
   _NavItem('Autonomous Agents', '/autonomous-agents', Icons.smart_toy_outlined),
   _NavItem(
       'Liquidity Vaults', '/liquidity-vaults', Icons.account_balance_rounded),
