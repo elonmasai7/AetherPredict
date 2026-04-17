@@ -8,7 +8,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.session import Base
-from app.models.entities import AgentStatus, Market, User
+from app.models.entities import (
+    AgentStatus,
+    Market,
+    StrategyEngineExport,
+    StrategyEngineLog,
+    StrategyEngineRanking,
+    StrategyEngineRun,
+    StrategyEngineStrategy,
+    User,
+)
 from app.services.strategy_engine_service import StrategyEngineService
 
 
@@ -82,17 +91,23 @@ def test_strategy_engine_build_and_canon_flow():
         assert build.strategy.template_name == "Sentiment-Based Forecast Engine"
         assert build.project_files[0].path == "canon.json"
         assert "arbitrage-detection" in build.project_files[0].content
+        assert db.query(StrategyEngineStrategy).count() == 1
+        assert db.query(StrategyEngineRun).count() == 1
+        assert db.query(StrategyEngineLog).count() >= 2
 
         strategy_id = build.strategy.id
 
         start = service.run_canon_action(user, strategy_id, "start")
         assert start.strategy.stage == "Simulation"
+        assert db.query(StrategyEngineRun).count() == 2
 
         deploy = service.run_canon_action(user, strategy_id, "deploy")
         assert deploy.strategy.stage == "Live deployment"
+        assert db.query(StrategyEngineRun).count() == 3
 
         ranking = service.ranking(user)
         assert ranking.entries[0].status == "Registered"
+        assert db.query(StrategyEngineRanking).count() == 1
 
         monitor = service.monitor(user)
         assert any(item.stage == "canon deploy" for item in monitor.logs)
@@ -100,6 +115,7 @@ def test_strategy_engine_build_and_canon_flow():
         export = service.export_project(user, strategy_id)
         assert export.project_name
         assert len(export.files) >= 4
+        assert db.query(StrategyEngineExport).count() == 1
 
         zip_name, zip_media_type, zip_payload = service.export_project_archive(
             user, strategy_id, "zip"
@@ -118,5 +134,6 @@ def test_strategy_engine_build_and_canon_flow():
         with tarfile.open(fileobj=io.BytesIO(tar_payload), mode="r") as archive:
             names = archive.getnames()
             assert any(name.endswith("/README.md") for name in names)
+        assert db.query(StrategyEngineExport).count() == 3
     finally:
         db.close()

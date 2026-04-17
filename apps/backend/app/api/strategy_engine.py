@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -14,7 +14,9 @@ from app.schemas.strategy_engine import (
     StrategyTemplateResponse,
 )
 from app.services.auth_service import get_current_user
+from app.services.rate_limit import enforce_rate_limit, request_client_ip
 from app.services.strategy_engine_service import StrategyEngineService
+from app.core.config import settings
 
 router = APIRouter(prefix="/strategy-engine", tags=["strategy-engine"])
 
@@ -45,7 +47,18 @@ def templates(db: Session = Depends(get_db), user=Depends(get_current_user)) -> 
     summary="Build a strategy from a prompt",
     description="Generate a persisted Strategy Engine workflow, AI agent plan, and Canon project scaffold from a natural-language forecasting prompt.",
 )
-def build(payload: StrategyBuildRequest, db: Session = Depends(get_db), user=Depends(get_current_user)) -> StrategyBuildResponse:
+async def build(
+    payload: StrategyBuildRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+) -> StrategyBuildResponse:
+    await enforce_rate_limit(
+        "strategy-build",
+        f"{user.id}:{request_client_ip(request)}",
+        settings.strategy_engine_build_limit_per_hour,
+        3600,
+    )
     return StrategyEngineService(db).build_from_prompt(user, payload.prompt)
 
 
@@ -55,12 +68,19 @@ def build(payload: StrategyBuildRequest, db: Session = Depends(get_db), user=Dep
     summary="Run a Canon workflow command",
     description="Advance a persisted strategy through Canon workflow stages such as init, start, or deploy.",
 )
-def canon_action(
+async def canon_action(
     strategy_id: str,
     command: str,
+    request: Request,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ) -> CanonActionResponse:
+    await enforce_rate_limit(
+        "strategy-canon",
+        f"{user.id}:{request_client_ip(request)}:{command}",
+        settings.strategy_engine_rate_limit_per_minute,
+        60,
+    )
     return StrategyEngineService(db).run_canon_action(user, strategy_id, command)
 
 

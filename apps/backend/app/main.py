@@ -35,13 +35,20 @@ from app.core.config import settings
 from app.db.session import SessionLocal, engine
 from app.services.market_data import live_market_data_worker
 from app.services.redis_bus import market_feed_worker
+from app.services.strategy_engine_jobs import strategy_engine_refresh_worker
 from app.services.tx_receipt_worker import tx_receipt_worker
 
-app = FastAPI(title=settings.app_name, version="0.2.0")
+app = FastAPI(
+    title=settings.app_name,
+    version="0.2.0",
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,11 +82,12 @@ for route in (
 stream_task: asyncio.Task | None = None
 asset_task: asyncio.Task | None = None
 receipt_task: asyncio.Task | None = None
+strategy_refresh_task: asyncio.Task | None = None
 
 
 @app.on_event("startup")
 async def startup() -> None:
-    global stream_task, asset_task, receipt_task
+    global stream_task, asset_task, receipt_task, strategy_refresh_task
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
     required_tables = {
@@ -99,6 +107,11 @@ async def startup() -> None:
         "copy_allocation_rules",
         "copied_trades",
         "copy_performance_snapshots",
+        "strategy_engine_strategies",
+        "strategy_engine_runs",
+        "strategy_engine_logs",
+        "strategy_engine_exports",
+        "strategy_engine_rankings",
     }
     missing_tables = sorted(required_tables - existing_tables)
     if missing_tables:
@@ -110,12 +123,13 @@ async def startup() -> None:
     stream_task = asyncio.create_task(market_feed_worker())
     asset_task = asyncio.create_task(live_market_data_worker())
     receipt_task = asyncio.create_task(tx_receipt_worker())
+    strategy_refresh_task = asyncio.create_task(strategy_engine_refresh_worker())
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
-    global stream_task, asset_task, receipt_task
-    for task in (stream_task, asset_task, receipt_task):
+    global stream_task, asset_task, receipt_task, strategy_refresh_task
+    for task in (stream_task, asset_task, receipt_task, strategy_refresh_task):
         if task is not None:
             task.cancel()
 
@@ -123,6 +137,16 @@ async def shutdown() -> None:
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "backend", "version": "0.2.0"}
+
+
+@app.get("/ready")
+def ready():
+    return {
+        "status": "ready",
+        "service": "backend",
+        "environment": settings.app_env,
+        "docs_enabled": settings.docs_enabled,
+    }
 
 
 def _resolve_frontend_dist() -> Path | None:
@@ -176,9 +200,7 @@ if frontend_dist is not None:
             "strategy-engine",
             "ws",
             "health",
-            "openapi.json",
-            "docs",
-            "redoc",
+            *(() if not settings.docs_enabled else ("openapi.json", "docs", "redoc")),
         )
 
         async def get_response(self, path: str, scope):

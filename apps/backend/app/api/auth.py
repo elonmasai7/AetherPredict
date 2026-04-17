@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,36 +22,71 @@ from app.services.auth_service import (
     rotate_refresh_token,
     verify_wallet_signature,
 )
+from app.services.rate_limit import (
+    clear_auth_failures,
+    enforce_auth_abuse_guard,
+    enforce_rate_limit,
+    record_auth_failure,
+    request_client_ip,
+)
+from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
+async def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    await enforce_rate_limit(
+        "auth-register",
+        f"{request_client_ip(request)}:{payload.email.lower()}",
+        settings.auth_rate_limit_per_minute,
+        60,
+    )
     user = create_user(db, payload.email, payload.password, payload.display_name)
     access, refresh = issue_tokens(db, user)
     return TokenResponse(access_token=access, refresh_token=refresh)
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+async def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    await enforce_rate_limit(
+        "auth-login",
+        f"{request_client_ip(request)}:{payload.email.lower()}",
+        settings.auth_rate_limit_per_minute,
+        60,
+    )
+    await enforce_auth_abuse_guard(payload.email, request)
     user = authenticate_user(db, payload.email, payload.password)
     if user is None:
         from fastapi import HTTPException
 
+        await record_auth_failure(payload.email, request)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    await clear_auth_failures(payload.email, request)
     access, refresh = issue_tokens(db, user)
     return TokenResponse(access_token=access, refresh_token=refresh)
 
 
 @router.post("/wallet/challenge")
-def wallet_challenge(payload: WalletChallengeRequest, db: Session = Depends(get_db)) -> dict:
+async def wallet_challenge(payload: WalletChallengeRequest, request: Request, db: Session = Depends(get_db)) -> dict:
+    await enforce_rate_limit(
+        "auth-wallet-challenge",
+        f"{request_client_ip(request)}:{payload.wallet_address.lower()}",
+        settings.auth_rate_limit_per_minute,
+        60,
+    )
     nonce = ensure_wallet_nonce(db, payload.wallet_address)
     return {"wallet_address": payload.wallet_address, "nonce": nonce}
 
 
 @router.post("/wallet", response_model=TokenResponse)
-def wallet_login(payload: WalletLoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+async def wallet_login(payload: WalletLoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    await enforce_rate_limit(
+        "auth-wallet-login",
+        f"{request_client_ip(request)}:{payload.wallet_address.lower()}",
+        settings.auth_rate_limit_per_minute,
+        60,
+    )
     nonce = ensure_wallet_nonce(db, payload.wallet_address)
     if payload.nonce != nonce or not payload.signature:
         from fastapi import HTTPException
@@ -71,7 +106,13 @@ def wallet_login(payload: WalletLoginRequest, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenResponse:
+async def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    await enforce_rate_limit(
+        "auth-refresh",
+        request_client_ip(request),
+        settings.auth_rate_limit_per_minute,
+        60,
+    )
     access, refresh_token = rotate_refresh_token(db, payload.refresh_token)
     return TokenResponse(access_token=access, refresh_token=refresh_token)
 

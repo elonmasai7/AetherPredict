@@ -1,5 +1,5 @@
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     hashkey_explorer_url: str = "https://explorer.hashkeychain.example"
     websocket_channel: str = "aetherpredict:market_updates"
     walletconnect_project_id: str = ""
+    cors_allowed_origins: list[str] = []
+    api_docs_enabled: bool | None = None
+    auth_rate_limit_per_minute: int = 20
+    auth_abuse_threshold: int = 8
+    auth_abuse_window_seconds: int = 900
+    strategy_engine_rate_limit_per_minute: int = 60
+    strategy_engine_build_limit_per_hour: int = 20
+    strategy_engine_refresh_seconds: int = 300
     vault_auto_execute_default_slugs: list[str] = []
     vault_auto_execute_allowlist_ids: list[int] = []
     vault_auto_execute_allowlist_manager_roles: list[str] = []
@@ -52,6 +60,7 @@ class Settings(BaseSettings):
         return value
 
     @field_validator(
+        "cors_allowed_origins",
         "vault_auto_execute_default_slugs",
         "vault_auto_execute_allowlist_manager_roles",
         mode="before",
@@ -68,6 +77,35 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [int(item.strip()) for item in value.split(",") if item.strip()]
         return value
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() == "production"
+
+    @property
+    def docs_enabled(self) -> bool:
+        if self.api_docs_enabled is None:
+            return not self.is_production
+        return self.api_docs_enabled
+
+    @property
+    def cors_origins(self) -> list[str]:
+        if self.cors_allowed_origins:
+            return self.cors_allowed_origins
+        return ["*"] if not self.is_production else []
+
+    @model_validator(mode="after")
+    def _validate_production_defaults(self):
+        if self.is_production:
+            if self.jwt_secret == "change-me" or len(self.jwt_secret) < 32:
+                raise ValueError("Production requires a strong JWT_SECRET with at least 32 characters.")
+            if not self.cors_allowed_origins:
+                raise ValueError("Production requires CORS_ALLOWED_ORIGINS to be explicitly configured.")
+            if "*" in self.cors_allowed_origins:
+                raise ValueError("Production cannot use wildcard CORS_ALLOWED_ORIGINS.")
+            if self.docs_enabled:
+                raise ValueError("Production must disable public API docs unless API_DOCS_ENABLED is explicitly false.")
+        return self
 
 
 settings = Settings()

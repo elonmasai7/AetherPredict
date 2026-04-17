@@ -376,6 +376,31 @@ PYTHONPATH=. .venv/bin/python -m app.scripts.strategy_engine_smoke --base-url ht
    - `forge install`
    - `forge test`
 
+## Production config
+
+Backend production startup now enforces a few non-negotiable safety rules:
+
+- `APP_ENV=production`
+- `JWT_SECRET` must be strong and at least 32 characters
+- `CORS_ALLOWED_ORIGINS` must be explicitly set and cannot contain `*`
+- API docs are disabled by default in production
+
+Example:
+
+```bash
+APP_ENV=production
+JWT_SECRET=replace-with-a-long-random-secret-value-at-least-32-chars
+CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+API_DOCS_ENABLED=false
+```
+
+The Strategy Engine now persists production workflow state in dedicated database tables instead of `workspace_preferences`, so new deploys should run:
+
+```bash
+cd apps/backend
+alembic upgrade head
+```
+
 ## Strategy Engine quick demo
 
 After the backend and Flutter app are running:
@@ -427,6 +452,10 @@ curl -X POST http://localhost:8000/auth/register \
   - `cd apps/flutter_app && flutter test test/strategy_engine_screens_test.dart`
 - Local-backend Strategy Engine integration test:
   - `cd apps/flutter_app && flutter test integration_test/strategy_engine_flow_test.dart -d chrome --dart-define=API_BASE_URL=http://localhost:8000`
+- Browser-based Strategy Engine integration execution:
+  - `cd apps/flutter_app && ./scripts/run_web_strategy_engine_integration.sh`
+  - Requires `chromedriver` plus a healthy backend on `http://localhost:8000` by default
+  - Override the backend target with `API_BASE_URL=http://your-host:8000`
 - If `docker compose up -d postgres redis` fails on Windows, start Docker Desktop first so the Linux engine pipe is available
 
 ## HashKey deployment envs

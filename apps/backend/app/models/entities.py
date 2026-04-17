@@ -59,6 +59,9 @@ class User(Base):
         back_populates="source",
         foreign_keys="CopyRelationship.source_user_id",
     )
+    strategy_engine_strategies: Mapped[list["StrategyEngineStrategy"]] = relationship(
+        back_populates="user"
+    )
 
 
 class RefreshToken(Base):
@@ -251,6 +254,104 @@ class DeviceToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="device_tokens")
+
+
+class StrategyEngineStrategy(Base):
+    __tablename__ = "strategy_engine_strategies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    prompt: Mapped[str] = mapped_column(Text)
+    template_key: Mapped[str] = mapped_column(String(80), index=True)
+    template_name: Mapped[str] = mapped_column(String(160))
+    stage: Mapped[str] = mapped_column(String(80), default="Scaffolded", index=True)
+    market: Mapped[str] = mapped_column(String(255))
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    owner: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(40), default="Draft", index=True)
+    project_name: Mapped[str] = mapped_column(String(180))
+    project_path: Mapped[str] = mapped_column(String(255))
+    automation_modes_json: Mapped[dict] = mapped_column(JSON, default=list)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="strategy_engine_strategies")
+    runs: Mapped[list["StrategyEngineRun"]] = relationship(back_populates="strategy", cascade="all, delete-orphan")
+    logs: Mapped[list["StrategyEngineLog"]] = relationship(back_populates="strategy", cascade="all, delete-orphan")
+    exports: Mapped[list["StrategyEngineExport"]] = relationship(back_populates="strategy", cascade="all, delete-orphan")
+    ranking: Mapped["StrategyEngineRanking | None"] = relationship(back_populates="strategy", uselist=False, cascade="all, delete-orphan")
+
+
+class StrategyEngineRun(Base):
+    __tablename__ = "strategy_engine_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    strategy_id: Mapped[int] = mapped_column(ForeignKey("strategy_engine_strategies.id"), index=True)
+    run_type: Mapped[str] = mapped_column(String(60), index=True)
+    stage: Mapped[str] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(40))
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    pipeline_json: Mapped[dict] = mapped_column(JSON, default=list)
+    project_files_json: Mapped[dict] = mapped_column(JSON, default=list)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    strategy: Mapped["StrategyEngineStrategy"] = relationship(back_populates="runs")
+    logs: Mapped[list["StrategyEngineLog"]] = relationship(back_populates="run")
+
+
+class StrategyEngineLog(Base):
+    __tablename__ = "strategy_engine_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    strategy_id: Mapped[int] = mapped_column(ForeignKey("strategy_engine_strategies.id"), index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("strategy_engine_runs.id"), nullable=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    stage: Mapped[str] = mapped_column(String(80), index=True)
+    message: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(40))
+    confidence: Mapped[float] = mapped_column(Float, default=0.5)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    strategy: Mapped["StrategyEngineStrategy"] = relationship(back_populates="logs")
+    run: Mapped["StrategyEngineRun | None"] = relationship(back_populates="logs")
+
+
+class StrategyEngineExport(Base):
+    __tablename__ = "strategy_engine_exports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    strategy_id: Mapped[int] = mapped_column(ForeignKey("strategy_engine_strategies.id"), index=True)
+    export_label: Mapped[str] = mapped_column(String(255), index=True)
+    archive_format: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    file_count: Mapped[int] = mapped_column(Integer, default=0)
+    file_manifest_json: Mapped[dict] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    strategy: Mapped["StrategyEngineStrategy"] = relationship(back_populates="exports")
+
+
+class StrategyEngineRanking(Base):
+    __tablename__ = "strategy_engine_rankings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    strategy_id: Mapped[int] = mapped_column(ForeignKey("strategy_engine_strategies.id"), unique=True, index=True)
+    rank: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    accuracy: Mapped[float] = mapped_column(Float, default=0)
+    pnl: Mapped[float] = mapped_column(Float, default=0)
+    consistency: Mapped[float] = mapped_column(Float, default=0)
+    calibration: Mapped[float] = mapped_column(Float, default=0)
+    risk_adjusted_performance: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(40), default="Draft", index=True)
+    last_registered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    strategy: Mapped["StrategyEngineStrategy"] = relationship(back_populates="ranking")
 
 
 class Watchlist(Base):
