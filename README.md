@@ -289,6 +289,68 @@ PYTHONPATH=. .venv/bin/python -m app.scripts.canon_cli deploy --target-dir /tmp/
 PYTHONPATH=. .venv/bin/python -m app.scripts.canon_cli monitor --target-dir /tmp/btc-arbitrage-pulse
 ```
 
+### OpenAPI and Swagger usage
+
+When the backend is running, FastAPI exposes:
+
+- `http://localhost:8000/docs`
+- `http://localhost:8000/redoc`
+- `http://localhost:8000/openapi.json`
+
+Example authenticated Strategy Engine session with `curl`:
+
+```bash
+BASE_URL=http://localhost:8000
+EMAIL="strategy$(date +%s)@example.com"
+PASSWORD="password123"
+
+curl -sS -X POST "$BASE_URL/auth/register" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"display_name\":\"Strategy Docs Demo\"}"
+
+LOGIN_JSON=$(curl -sS -X POST "$BASE_URL/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+
+TOKEN=$(printf '%s' "$LOGIN_JSON" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+
+curl -sS "$BASE_URL/strategy-engine/state" \
+  -H "Authorization: Bearer $TOKEN"
+
+BUILD_JSON=$(curl -sS -X POST "$BASE_URL/strategy-engine/build" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Build an innovative cross-market arbitrage model for BTC prediction markets using ETF flows, sentiment, and public catalyst data."}')
+
+STRATEGY_ID=$(printf '%s' "$BUILD_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n 1)
+
+curl -sS -X POST "$BASE_URL/strategy-engine/strategies/$STRATEGY_ID/canon/init" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -sS -X POST "$BASE_URL/strategy-engine/strategies/$STRATEGY_ID/canon/start" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -sS -X POST "$BASE_URL/strategy-engine/strategies/$STRATEGY_ID/canon/deploy" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -sS "$BASE_URL/strategy-engine/monitor" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -sS "$BASE_URL/strategy-engine/ranking" \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -L "$BASE_URL/strategy-engine/strategies/$STRATEGY_ID/export?format=zip" \
+  -H "Authorization: Bearer $TOKEN" \
+  -o /tmp/strategy-export.zip
+```
+
+For a backend-only smoke pass, there is also a Python helper:
+
+```bash
+cd apps/backend
+PYTHONPATH=. .venv/bin/python -m app.scripts.strategy_engine_smoke --base-url http://localhost:8000
+```
+
 ## Quick start
 
 1. Copy `.env.example` to `.env`
@@ -363,6 +425,8 @@ curl -X POST http://localhost:8000/auth/register \
   - `cd apps/flutter_app && flutter test test/strategy_engine_navigation_test.dart`
 - Verified Strategy Engine Flutter authenticated screen test:
   - `cd apps/flutter_app && flutter test test/strategy_engine_screens_test.dart`
+- Local-backend Strategy Engine integration test:
+  - `cd apps/flutter_app && flutter test integration_test/strategy_engine_flow_test.dart -d chrome --dart-define=API_BASE_URL=http://localhost:8000`
 - If `docker compose up -d postgres redis` fails on Windows, start Docker Desktop first so the Linux engine pipe is available
 
 ## HashKey deployment envs

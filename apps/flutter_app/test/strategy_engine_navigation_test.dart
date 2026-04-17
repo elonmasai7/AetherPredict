@@ -37,8 +37,8 @@ GoRouter _router() {
       ),
       GoRoute(
         path: '/strategy-engine/performance-ranking',
-        builder: (_, __) =>
-            shell('/strategy-engine/performance-ranking', 'Performance Ranking'),
+        builder: (_, __) => shell(
+            '/strategy-engine/performance-ranking', 'Performance Ranking'),
       ),
     ],
   );

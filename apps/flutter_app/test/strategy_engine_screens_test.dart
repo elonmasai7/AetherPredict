@@ -110,7 +110,8 @@ class _FakeStrategyApiClient extends ApiClient {
   }
 
   @override
-  Future<CanonProjectExportModel> exportStrategyProject(String strategyId) async {
+  Future<CanonProjectExportModel> exportStrategyProject(
+      String strategyId) async {
     return const CanonProjectExportModel(
       projectName: 'btc-arbitrage-pulse',
       exportLabel: 'btc-arbitrage-pulse-export',
@@ -122,7 +123,8 @@ class _FakeStrategyApiClient extends ApiClient {
   }
 
   @override
-  Future<StrategyBuildResultModel> buildStrategyFromPrompt(String prompt) async {
+  Future<StrategyBuildResultModel> buildStrategyFromPrompt(
+      String prompt) async {
     return StrategyBuildResultModel(
       strategy: StrategyRecordModel(
         id: 'strategy-2',
