@@ -1,18 +1,157 @@
-# PredictOdds Pro
+# AetherPredict
 
-PredictOdds Pro is a production-style MVP for real-time binary prediction markets built with:
+AetherPredict is a prediction-market platform built around binary outcomes, real-time probability pricing, liquidity intelligence, and retail-friendly execution. This repository contains the full local stack: a FastAPI backend, a Flutter client, an AI support service, and a Dart companion engine for simulated market behavior.
 
-- Flutter 3.24 / Dart 3.5 frontend in `frontend/`
-- FastAPI 0.115+ / SQLAlchemy 2 / PostgreSQL 16+Timescale / Redis 7 backend in `backend/`
-- Kalshi-first prediction market data integration with Alpaca credential support for secure account connectivity patterns
+AetherPredict is designed to feel like institutional-grade liquidity infrastructure for prediction markets while staying accessible to everyday traders. The product focuses on probability-native market mechanics rather than generic exchange abstractions.
 
-The app is tuned for retail-sized trading under `$100`, live bid/ask spreads, order book depth, and simulated liquidity that behaves like an event-driven prediction venue instead of a generic broker UI.
+What makes the platform distinct:
 
-## PredictFlow Dart companion
+- probability-based YES/NO pricing
+- spread-aware liquidity tiers
+- event-driven market intelligence
+- slippage previews and risk-aware execution
+- AI-assisted market support
+- cross-platform Flutter delivery
 
-The old `predictflow/` Node/TypeScript project has been removed and replaced with a pure Dart package in `predictflow/`.
+If you want to get the stack running quickly, start here:
 
-Run it separately if you want the companion local engine online:
+```bash
+docker compose up -d
+```
+
+Then open:
+
+- App/API: `http://localhost:8000`
+- API docs: `http://localhost:8000/docs`
+- Backend readiness: `http://localhost:8000/ready`
+
+**Repository Structure**
+
+```text
+.
+├── apps/
+│   ├── ai-service/        # AI support service
+│   ├── backend/           # FastAPI application
+│   └── flutter_app/       # Flutter client
+├── predictflow/           # Dart companion engine
+├── docker-compose.yml     # Local full-stack orchestration
+├── .env.example
+└── README.md
+```
+
+**Architecture**
+
+- `apps/backend`: primary API, auth, market logic, liquidity intelligence, vaults, and execution flows
+- `apps/flutter_app`: main user app for web and mobile with market list, detail, trading, operations, and settings
+- `apps/ai-service`: AI support endpoints used by backend workflows
+- `predictflow`: standalone Dart companion service for local market simulation, previews, and simulated orders
+- `postgres`: primary relational store
+- `redis`: caching and real-time support
+
+**Quick Start**
+
+1. Review [.env.example](/workspaces/AetherPredict/.env.example) if you want to customize local settings.
+2. Start the local Docker stack with `docker compose up -d`.
+3. Open the backend at `http://localhost:8000`.
+4. Optionally run the Flutter client locally.
+5. Optionally start `predictflow/` for companion simulation features.
+
+Start the main stack:
+
+```bash
+docker compose up -d
+```
+
+Main local endpoints:
+
+- App/API: `http://localhost:8000`
+- API docs: `http://localhost:8000/docs`
+- Backend readiness: `http://localhost:8000/ready`
+- AI service: `http://localhost:8010`
+- Postgres: `localhost:5432`
+- Redis: `localhost:6379`
+
+**Environment**
+
+Root environment values live in [.env.example](/workspaces/AetherPredict/.env.example).
+
+Important settings:
+
+- `DATABASE_URL`
+- `REDIS_URL`
+- `AI_SERVICE_URL`
+- `JWT_SECRET`
+- `OPENAI_API_KEY`
+- `HASHKEY_RPC_URL`
+- `FLUTTER_API_BASE_URL`
+- `FLUTTER_WS_MARKETS_URL`
+
+If `HASHKEY_RPC_URL` is not configured, blockchain-dependent wallet and portfolio flows may be partially degraded while the main market experience still works.
+
+**What You Get**
+
+The current AetherPredict stack includes:
+
+- live market views with probability-aware spreads
+- liquidity intelligence overlays across market cards and detail views
+- slippage previews and execution-aware trading flows
+- AI-supported market and anomaly workflows
+- a dedicated operations surface for monitoring system activity
+- a Dart companion engine for local simulated market reads and order flows
+
+**Running the Backend Locally**
+
+If you want to run the backend outside Docker:
+
+```bash
+cd apps/backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=. .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Backend docs:
+
+- `http://localhost:8000/docs`
+- `http://localhost:8000/openapi.json`
+
+**Running the Flutter App**
+
+The main Flutter application lives in `apps/flutter_app`.
+
+Install dependencies:
+
+```bash
+cd apps/flutter_app
+flutter pub get
+```
+
+Run on Chrome:
+
+```bash
+flutter run -d chrome \
+  --dart-define=API_BASE_URL=http://localhost:8000 \
+  --dart-define=WS_MARKETS_URL=ws://localhost:8000/ws/markets \
+  --dart-define=PREDICTFLOW_BASE_URL=http://localhost:8081
+```
+
+You can also build for web:
+
+```bash
+flutter build web \
+  --dart-define=API_BASE_URL=http://localhost:8000 \
+  --dart-define=WS_MARKETS_URL=ws://localhost:8000/ws/markets \
+  --dart-define=PREDICTFLOW_BASE_URL=http://localhost:8081
+```
+
+More Flutter-specific notes are in [apps/flutter_app/README.md](/workspaces/AetherPredict/apps/flutter_app/README.md).
+
+**PredictFlow Companion**
+
+`predictflow/` is a pure Dart companion service. It replaces the older Node/TypeScript project and provides local simulated market snapshots, order previews, dashboard data, and simulated order execution for the Flutter app.
+
+Run it separately when you want companion features online:
 
 ```bash
 cd predictflow
@@ -20,234 +159,132 @@ dart pub get
 dart run bin/server.dart
 ```
 
-Default local endpoint:
+Default endpoint:
 
-```text
-http://localhost:8081
-```
+- `http://localhost:8081`
 
-## Official API references used
+The Flutter app uses this service for:
 
-- Kalshi market data and auth docs: https://docs.kalshi.com/getting_started/quick_start_market_data and https://docs.kalshi.com/getting_started/quick_start_authenticated_requests
-- Alpaca auth docs: https://docs.alpaca.markets/docs/authentication and https://docs.alpaca.markets/docs/using-oauth2-and-trading-api
+- companion market snapshots
+- simulated order previews
+- simulated order placement
+- companion dashboard and portfolio reads
 
-Implementation note:
-- Kalshi authenticated requests use `KALSHI-ACCESS-KEY`, `KALSHI-ACCESS-TIMESTAMP`, and `KALSHI-ACCESS-SIGNATURE` RSA-PSS headers.
-- Alpaca supports direct key headers for Trading API and OAuth2/Bearer flows for Connect/Broker integrations.
+**Core Product Areas**
 
-## Project layout
+The current AetherPredict experience emphasizes prediction-market-native liquidity tooling:
 
-```text
-backend/
-frontend/
-README.md
-```
+- bid/ask spread tiers on cards, details, and trading views
+- YES/NO liquidity depth views
+- probability ladder and liquidity imbalance metrics
+- AI market-maker posture and uncertainty handling
+- expiry liquidity decay warnings
+- information shock response
+- unified liquidity risk scoring
+- smart liquidity vault concepts
+- retail-friendly trade sizing and slippage previews
 
-## 1. Backend setup
+**Working with the API**
 
-### Local Python run
+Useful local endpoints include:
 
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python seed.py --ensure-db
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+- `GET /ready`
+- `GET /docs`
+- `GET /markets`
+- `GET /markets/assets`
+- `GET /liquidity/{market_id}`
+- auth and trading routes exposed by the FastAPI backend
 
-API docs:
-
-```text
-http://localhost:8000/docs
-```
-
-### Docker run
+Example health check:
 
 ```bash
-cd backend
-docker compose up --build
+curl http://localhost:8000/ready
 ```
 
-This starts:
-
-- PostgreSQL/Timescale on `localhost:5432`
-- Redis on `localhost:6379`
-- FastAPI on `localhost:8000`
-
-## 2. Frontend setup
+Example market asset request:
 
 ```bash
-cd frontend
-flutter pub get
-flutter run \
-  --dart-define=API_BASE_URL=http://localhost:8000 \
-  --dart-define=WS_BASE_URL=ws://localhost:8000
+curl http://localhost:8000/markets/assets
 ```
 
-For Chrome/web:
+The backend also exposes auth, market, trading, vault, and liquidity-related routes through the FastAPI application and interactive docs.
+
+**Development Workflow**
+
+Start infrastructure:
 
 ```bash
-flutter run -d chrome \
-  --dart-define=API_BASE_URL=http://localhost:8000 \
-  --dart-define=WS_BASE_URL=ws://localhost:8000
+docker compose up -d
 ```
 
-## 3. Create a demo user and log in
-
-The seed script creates:
-
-- Email: `demo@predictodds.pro`
-- Password: `DemoPass123!`
-
-Or create your own:
+Run the backend locally if needed:
 
 ```bash
-curl -X POST http://localhost:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"StrongPass123"}'
-
-curl -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"StrongPass123"}'
+cd apps/backend
+PYTHONPATH=. .venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## 4. Test market creation
+Run Flutter locally:
 
 ```bash
-curl -X POST http://localhost:8000/markets \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title":"Will Nairobi hit 30C this week?",
-    "event":"Nairobi weather",
-    "end_date":"2026-04-30T18:00:00Z",
-    "min_liquidity":3500,
-    "provider":"mock"
-  }'
+cd apps/flutter_app
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 ```
 
-## 5. Test live odds
-
-List markets:
+Run PredictFlow locally:
 
 ```bash
-curl http://localhost:8000/markets
+cd predictflow
+dart run bin/server.dart
 ```
 
-Get odds for market `1`:
+Recommended local workflow:
+
+1. Start `docker compose up -d`
+2. Confirm backend readiness at `http://localhost:8000/ready`
+3. Run Flutter locally if you want an interactive client session
+4. Run `predictflow` when you want companion market simulation features enabled
+
+**Testing and Verification**
+
+Backend tests:
 
 ```bash
-curl http://localhost:8000/markets/1/odds
+cd apps/backend
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=. .venv/bin/pytest -q
 ```
 
-Get liquidity:
+Flutter analysis:
 
 ```bash
-curl http://localhost:8000/liquidity/1
+cd apps/flutter_app
+flutter analyze
 ```
 
-## 6. Test trading
-
-First login and copy the bearer token:
+Flutter tests:
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"demo@predictodds.pro","password":"DemoPass123!"}' | python -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
-```
-
-Buy YES for `$25`:
-
-```bash
-curl -X POST http://localhost:8000/trade/1 \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"side":"BUY_YES","notional":25}'
-```
-
-Then inspect updated odds:
-
-```bash
-curl http://localhost:8000/markets/1/odds
-```
-
-## 7. Test real-time websocket
-
-Example with `wscat`:
-
-```bash
-npx wscat -c ws://localhost:8000/ws/odds/1
-```
-
-You will receive a snapshot roughly every second and immediately after trades.
-
-## 8. Kalshi API signup and usage
-
-1. Sign up at https://kalshi.com or demo docs via https://docs.kalshi.com
-2. Generate an API key pair in account security
-3. Save:
-   - API key ID
-   - private key PEM
-4. In the Flutter Settings screen, choose `Kalshi` and paste:
-   - API key into `API key / client id`
-   - private key into `Kalshi private key PEM`
-5. The backend stores these encrypted with Fernet and can use them for authenticated Kalshi proxy calls
-
-Current official Kalshi docs note that authenticated requests require:
-
-- `KALSHI-ACCESS-KEY`
-- `KALSHI-ACCESS-TIMESTAMP`
-- `KALSHI-ACCESS-SIGNATURE`
-
-## 9. Alpaca signup and usage
-
-1. Create a paper trading account at https://alpaca.markets
-2. Generate paper credentials
-3. In Flutter Settings choose `Alpaca`
-4. Save:
-   - API key in `API key / client id`
-   - API secret in `API secret / OAuth token`
-
-Current official Alpaca docs say:
-
-- Trading API supports `APCA-API-KEY-ID` and `APCA-API-SECRET-KEY` headers
-- OAuth2/Bearer flows are available for broader app integrations
-
-## 10. Sample data
-
-`backend/seed.py` creates:
-
-- Nairobi weather market
-- Nairobi election turnout market
-- Fed rates market
-- Trump policy volatility market
-
-Run again anytime:
-
-```bash
-cd backend
-python seed.py --ensure-db
-```
-
-## 11. Testing
-
-Backend:
-
-```bash
-cd backend
-pytest tests/test_liquidity.py
-```
-
-Frontend:
-
-```bash
-cd frontend
+cd apps/flutter_app
 flutter test
 ```
 
-## 12. Notes
+PredictFlow tests:
 
-- The liquidity engine uses LMSR-style pricing with dynamic spread widening under volatility and near expiry.
-- Real provider fetches fall back to mock liquidity when credentials or remote responses are unavailable.
-- The MVP is runnable as-is in mock mode and ready for hardening into a production deployment on Railway, Fly.io, Render, or Heroku-style container hosts.
+```bash
+cd predictflow
+dart test
+```
+
+**Production Notes**
+
+- The local Docker stack is intended for development and integration work.
+- The backend depends on environment configuration for external providers and chain-connected features.
+- The AI and liquidity components are designed to reinforce prediction markets as the core product, not to mimic forex or generic exchange infrastructure.
+- Before production deployment, review secrets management, provider credentials, persistence, monitoring, and rate limiting.
+
+**Troubleshooting**
+
+- If the app loads but wallet data fails, check `HASHKEY_RPC_URL`.
+- If companion market panels are empty, make sure `predictflow` is running on `http://localhost:8081` or update `PREDICTFLOW_BASE_URL`.
+- If backend endpoints fail locally, confirm `docker compose ps` shows `backend`, `postgres`, `redis`, and `ai-service` as `Up`.
+- If Flutter cannot connect to APIs, verify your `--dart-define` values match the backend host and websocket URL.
