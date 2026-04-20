@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/enterprise/enterprise_components.dart';
@@ -34,7 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 DropdownButtonFormField<String>(
-                  value: _timezone,
+                  initialValue: _timezone,
                   decoration: const InputDecoration(labelText: 'Timezone'),
                   items: const [
                     DropdownMenuItem(value: 'UTC', child: Text('UTC')),
@@ -129,6 +130,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AetherSpacing.lg),
+          EnterprisePanel(
+            title: 'PredictFlow Dart Integration',
+            subtitle:
+                'Companion local engine endpoint for the Dart replacement of the old predictflow service.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Base URL: ${AppConfig.predictFlowBaseUrl}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: AetherSpacing.sm),
+                const Text(
+                  'Run the local engine with `cd predictflow && dart run bin/server.dart` if you want operations health checks and local engine workflows to connect.',
+                  style: TextStyle(color: AetherColors.muted),
                 ),
               ],
             ),

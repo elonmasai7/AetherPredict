@@ -66,6 +66,95 @@ class ApiClient {
     );
   }
 
+  Future<PredictFlowHealth> fetchPredictFlowHealth() async {
+    final response = await _getFromBaseUrl(
+      AppConfig.predictFlowBaseUrl,
+      '/health',
+      endpointLabel: 'predictflow:/health',
+    );
+    return PredictFlowHealth.fromJson(
+      _decodeMap(response, endpoint: 'predictflow:/health'),
+    );
+  }
+
+  Future<List<PredictFlowMarketSnapshot>> fetchPredictFlowMarkets() async {
+    final response = await _getFromBaseUrl(
+      AppConfig.predictFlowBaseUrl,
+      '/api/markets',
+      endpointLabel: 'predictflow:/api/markets',
+    );
+    final payload = _decodeList(response, endpoint: 'predictflow:/api/markets');
+    return payload
+        .map((item) =>
+            PredictFlowMarketSnapshot.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<PredictFlowPortfolio> fetchPredictFlowDashboard(String wallet) async {
+    final response = await _getFromBaseUrl(
+      AppConfig.predictFlowBaseUrl,
+      '/api/dashboard/$wallet',
+      endpointLabel: 'predictflow:/api/dashboard/$wallet',
+    );
+    return PredictFlowPortfolio.fromJson(
+      _decodeMap(response, endpoint: 'predictflow:/api/dashboard/$wallet'),
+    );
+  }
+
+  Future<PredictFlowPreview> previewPredictFlowOrder({
+    required String marketId,
+    required String outcome,
+    required String side,
+    required double shares,
+    String type = 'MARKET',
+    double? limitPrice,
+  }) async {
+    final response = await _postToBaseUrl(
+      AppConfig.predictFlowBaseUrl,
+      '/api/preview',
+      {
+        'marketId': marketId,
+        'outcome': outcome,
+        'side': side,
+        'type': type,
+        'shares': shares,
+        if (limitPrice != null) 'limitPrice': limitPrice,
+      },
+      endpointLabel: 'predictflow:/api/preview',
+    );
+    return PredictFlowPreview.fromJson(
+      _decodeMap(response, endpoint: 'predictflow:/api/preview'),
+    );
+  }
+
+  Future<PredictFlowOrderResult> placePredictFlowOrder({
+    required String marketId,
+    required String wallet,
+    required String outcome,
+    required String side,
+    required double shares,
+    String type = 'MARKET',
+    double? limitPrice,
+  }) async {
+    final response = await _postToBaseUrl(
+      AppConfig.predictFlowBaseUrl,
+      '/api/orders',
+      {
+        'marketId': marketId,
+        'wallet': wallet,
+        'outcome': outcome,
+        'side': side,
+        'type': type,
+        'shares': shares,
+        if (limitPrice != null) 'limitPrice': limitPrice,
+      },
+      endpointLabel: 'predictflow:/api/orders',
+    );
+    return PredictFlowOrderResult.fromJson(
+      _decodeMap(response, endpoint: 'predictflow:/api/orders'),
+    );
+  }
+
   Future<List<AgentCardModel>> fetchAgents() async {
     final response = await _get('/agents');
     final payload = _decodeList(response, endpoint: '/agents');
@@ -492,6 +581,18 @@ class ApiClient {
     );
   }
 
+  Future<http.Response> _getFromBaseUrl(
+    String baseUrl,
+    String endpoint, {
+    required String endpointLabel,
+  }) async {
+    final uri = Uri.parse('$baseUrl$endpoint');
+    return _requestWithRetry(
+      endpoint: endpointLabel,
+      send: (headers) => http.get(uri, headers: headers),
+    );
+  }
+
   Future<http.Response> _post(
       String endpoint, Map<String, dynamic> body) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
@@ -513,6 +614,24 @@ class ApiClient {
       endpoint: endpoint,
       includeJsonContentType: true,
       send: (headers) => http.patch(
+        uri,
+        headers: headers,
+        body: jsonEncode(body),
+      ),
+    );
+  }
+
+  Future<http.Response> _postToBaseUrl(
+    String baseUrl,
+    String endpoint,
+    Map<String, dynamic> body, {
+    required String endpointLabel,
+  }) async {
+    final uri = Uri.parse('$baseUrl$endpoint');
+    return _requestWithRetry(
+      endpoint: endpointLabel,
+      includeJsonContentType: true,
+      send: (headers) => http.post(
         uri,
         headers: headers,
         body: jsonEncode(body),

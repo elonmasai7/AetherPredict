@@ -64,6 +64,19 @@ class AppConfig {
     return 'ws://localhost:8000/ws/copy';
   }
 
+  static String get predictFlowBaseUrl {
+    const configured =
+        String.fromEnvironment('PREDICTFLOW_BASE_URL', defaultValue: '');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb) {
+      final base = Uri.base;
+      final scheme = base.scheme;
+      final host = base.host;
+      return '$scheme://$host:8081';
+    }
+    return 'http://localhost:8081';
+  }
+
   static Uri _webBackendOrigin() {
     final base = Uri.base;
     final isLocalHost = base.host == 'localhost' || base.host == '127.0.0.1';

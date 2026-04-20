@@ -1,14 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/providers.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/enterprise/enterprise_components.dart';
 
-class OperationsConsoleScreen extends StatelessWidget {
+class OperationsConsoleScreen extends ConsumerWidget {
   const OperationsConsoleScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final predictFlowHealth = ref.watch(predictFlowHealthProvider);
+    final predictFlowMarkets = ref.watch(predictFlowMarketsProvider);
+    final predictFlowDashboard = ref.watch(predictFlowDashboardProvider);
+
+    final openPositions = predictFlowDashboard.maybeWhen(
+      data: (dashboard) => dashboard.positions.length,
+      orElse: () => 0,
+    );
+    final marketCount = predictFlowMarkets.maybeWhen(
+      data: (markets) => markets.length,
+      orElse: () => 0,
+    );
+    final incidents = predictFlowHealth.maybeWhen(
+      data: (health) => health.status.toLowerCase() == 'ok' ? 0 : 1,
+      orElse: () => 1,
+    );
+
     return AppScaffold(
       title: 'Operations',
       subtitle:
@@ -17,26 +36,38 @@ class OperationsConsoleScreen extends StatelessWidget {
         length: 7,
         child: Column(
           children: [
+            const _PredictFlowStatusPanel(),
+            const SizedBox(height: AetherSpacing.md),
             EnterprisePanel(
               child: Row(
-                children: const [
+                children: [
                   Expanded(
                     child: StatusBadge(
-                      label: 'System Status: Operational',
-                      color: AetherColors.success,
+                      label: predictFlowHealth.maybeWhen(
+                        data: (health) => 'System Status: ${health.status == 'ok' ? 'Operational' : 'Watch'}',
+                        orElse: () => 'System Status: Syncing',
+                      ),
+                      color: predictFlowHealth.maybeWhen(
+                        data: (health) =>
+                            health.status == 'ok' ? AetherColors.success : AetherColors.warning,
+                        orElse: () => AetherColors.warning,
+                      ),
                     ),
                   ),
-                  SizedBox(width: AetherSpacing.sm),
+                  const SizedBox(width: AetherSpacing.sm),
                   Expanded(
                     child: StatusBadge(
-                      label: 'Open Incidents: 1',
-                      color: AetherColors.warning,
+                      label: 'Open Incidents: $incidents',
+                      color: incidents == 0
+                          ? AetherColors.success
+                          : AetherColors.warning,
                     ),
                   ),
-                  SizedBox(width: AetherSpacing.sm),
+                  const SizedBox(width: AetherSpacing.sm),
                   Expanded(
                     child: StatusBadge(
-                      label: 'Critical Alerts: 0',
+                      label:
+                          'PredictFlow Markets: ${marketCount > 0 ? marketCount : '--'} · Positions: ${openPositions > 0 ? openPositions : '--'}',
                       color: AetherColors.success,
                     ),
                   ),
@@ -77,21 +108,103 @@ class OperationsConsoleScreen extends StatelessWidget {
   }
 }
 
-class _SystemStatusTab extends StatelessWidget {
+class _PredictFlowStatusPanel extends ConsumerWidget {
+  const _PredictFlowStatusPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final healthValue = ref.watch(predictFlowHealthProvider);
+    final marketsValue = ref.watch(predictFlowMarketsProvider);
+    final online = healthValue.maybeWhen(
+      data: (health) => health.status == 'ok',
+      orElse: () => false,
+    );
+    final message = healthValue.when(
+      data: (health) =>
+          '${health.service} online with ${health.markets} tracked markets from the Dart companion engine.',
+      loading: () => 'Connecting to PredictFlow Dart engine...',
+      error: (_, __) =>
+          'PredictFlow Dart engine offline. Start it with: cd predictflow && dart run bin/server.dart',
+    );
+    final marketHint = marketsValue.maybeWhen(
+      data: (markets) => markets.isEmpty
+          ? 'No PredictFlow markets returned yet.'
+          : 'Top local market: ${markets.first.title}',
+      orElse: () => 'Waiting for PredictFlow market snapshots.',
+    );
+        return EnterprisePanel(
+          title: 'PredictFlow Dart',
+          subtitle:
+              'Companion Dart prediction engine replacing the old TypeScript service layer.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: const TextStyle(color: AetherColors.muted),
+                    ),
+                  ),
+                  const SizedBox(width: AetherSpacing.sm),
+                  StatusBadge(
+                    label: online ? 'Online' : 'Offline',
+                    color: online ? AetherColors.success : AetherColors.warning,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.sm),
+              Text(
+                marketHint,
+                style: const TextStyle(color: AetherColors.muted),
+              ),
+            ],
+          ),
+        );
+  }
+}
+
+class _SystemStatusTab extends ConsumerWidget {
   const _SystemStatusTab();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final healthValue = ref.watch(predictFlowHealthProvider);
+    final marketsValue = ref.watch(predictFlowMarketsProvider);
+    final rows = <_SystemStatusRow>[
+      const _SystemStatusRow('API Gateway', '99.99%', '142 ms', 'Healthy'),
+      const _SystemStatusRow('Oracle Mesh', '99.97%', '186 ms', 'Healthy'),
+      const _SystemStatusRow('Resolution Engine', '99.92%', '302 ms', 'Watch'),
+      const _SystemStatusRow('WebSocket Streams', '99.96%', '88 ms', 'Healthy'),
+      const _SystemStatusRow('Risk Engine', '99.94%', '214 ms', 'Healthy'),
+    ];
+    healthValue.whenData((health) {
+      rows.add(
+        _SystemStatusRow(
+          'PredictFlow Dart',
+          '${health.markets} mkts',
+          'Local HTTP',
+          health.status == 'ok' ? 'Linked' : 'Watch',
+        ),
+      );
+    });
+    marketsValue.whenData((markets) {
+      if (markets.isNotEmpty) {
+        rows.add(
+          _SystemStatusRow(
+            'PredictFlow Local Book',
+            '\$${markets.first.liquidityUsd.toStringAsFixed(0)}',
+            '\$${markets.first.volume24h.toStringAsFixed(0)} 24h',
+            markets.first.resolved ? 'Resolved' : 'Healthy',
+          ),
+        );
+      }
+    });
     return EnterpriseDataTable<_SystemStatusRow>(
       title: 'System Status Grid',
       subtitle: 'Live service uptime, latency, and current health state.',
-      rows: const [
-        _SystemStatusRow('API Gateway', '99.99%', '142 ms', 'Healthy'),
-        _SystemStatusRow('Oracle Mesh', '99.97%', '186 ms', 'Healthy'),
-        _SystemStatusRow('Resolution Engine', '99.92%', '302 ms', 'Watch'),
-        _SystemStatusRow('WebSocket Streams', '99.96%', '88 ms', 'Healthy'),
-        _SystemStatusRow('Risk Engine', '99.94%', '214 ms', 'Healthy'),
-      ],
+      rows: rows,
       rowId: (row) => row.service,
       searchHint: 'Search service',
       filters: [
@@ -347,20 +460,34 @@ class _DisputeQueueTab extends StatelessWidget {
   }
 }
 
-class _WalletActivityTab extends StatelessWidget {
+class _WalletActivityTab extends ConsumerWidget {
   const _WalletActivityTab();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dashboardValue = ref.watch(predictFlowDashboardProvider);
+    final rows = dashboardValue.maybeWhen(
+      data: (dashboard) => dashboard.positions
+          .map(
+            (position) => _WalletActivityRow(
+              dashboard.wallet,
+              '${position.outcome} position',
+              '${position.shares.toStringAsFixed(1)} sh',
+              position.unrealizedPnl >= 0 ? 'Normal' : 'Review',
+            ),
+          )
+          .toList(),
+      orElse: () => const <_WalletActivityRow>[],
+    );
     return EnterpriseDataTable<_WalletActivityRow>(
       title: 'Wallet Activity',
-      subtitle: 'Address-level settlement telemetry and risk posture flags.',
-      rows: const [
-        _WalletActivityRow('0x1f...a11d', 'Deposit', '\$200,000', 'Normal'),
-        _WalletActivityRow('0x8a...02bc', 'Withdrawal', '\$48,000', 'Review'),
-        _WalletActivityRow(
-            '0xc1...ef54', 'Forecast Settlement', '\$120,000', 'Normal'),
-      ],
+      subtitle:
+          'PredictFlow wallet activity derived from the local Dart engine portfolio.',
+      rows: rows.isEmpty
+          ? const [
+              _WalletActivityRow('demo-wallet', 'PredictFlow sync', '0', 'Review')
+            ]
+          : rows,
       rowId: (row) => row.address,
       searchHint: 'Search wallet address',
       filters: [

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api_client.dart';
 import '../../core/models.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
@@ -25,6 +26,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
     final sentimentValue = ref.watch(sentimentFeedProvider);
     final copilotValue = ref.watch(copilotProvider);
     final liquidityValue = ref.watch(selectedMarketLiquidityProvider);
+    final predictFlowMarketsValue = ref.watch(predictFlowMarketsProvider);
     final wallet = ref.watch(walletSessionProvider);
 
     return AppScaffold(
@@ -41,6 +43,8 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
               _probabilityTrendPanel(market, points),
               const SizedBox(height: AetherSpacing.lg),
               _liquidityOverviewPanel(market, liquidityValue),
+              const SizedBox(height: AetherSpacing.lg),
+              _predictFlowCompanionPanel(market, predictFlowMarketsValue),
               const SizedBox(height: AetherSpacing.lg),
               _liquidityDepthPanel(liquidityValue),
               const SizedBox(height: AetherSpacing.lg),
@@ -403,6 +407,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
 
   Widget _actionPanel(Market market, bool walletConnected) {
     final spread = market.liquidityIntelligence;
+    final predictFlowMarketsValue = ref.watch(predictFlowMarketsProvider);
     return EnterprisePanel(
       title: 'Forecast Actions',
       subtitle:
@@ -481,6 +486,51 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AetherSpacing.sm),
+          predictFlowMarketsValue.when(
+            data: (companionMarkets) {
+              final companion = _selectPredictFlowMarket(market, companionMarkets);
+              return SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: companion == null
+                      ? null
+                      : () async {
+                          final wallet = ref.read(walletSessionProvider);
+                          final apiClient = ref.read(apiClientProvider);
+                          final result = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => _PredictFlowOrderDialog(
+                              market: companion,
+                              walletAddress: wallet.address ?? 'demo-wallet',
+                              apiClient: apiClient,
+                            ),
+                          );
+                          if (result == true) {
+                            ref.invalidate(predictFlowMarketsProvider);
+                            ref.invalidate(predictFlowDashboardProvider);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'PredictFlow simulation updated ${companion.title}.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.hub_outlined),
+                  label: Text(
+                    companion == null
+                        ? 'PredictFlow companion unavailable'
+                        : 'Simulate in PredictFlow',
+                  ),
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
           ),
         ],
       ),
@@ -652,6 +702,100 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
             style: const TextStyle(color: AetherColors.critical)),
       ),
     );
+  }
+
+  Widget _predictFlowCompanionPanel(
+    Market market,
+    AsyncValue<List<PredictFlowMarketSnapshot>> predictFlowMarketsValue,
+  ) {
+    return predictFlowMarketsValue.when(
+      data: (markets) {
+        if (markets.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final companion = markets.firstWhere(
+          (item) =>
+              item.category.toLowerCase() == market.category.toLowerCase(),
+          orElse: () => markets.first,
+        );
+        final yesDelta = ((market.yesProbability - companion.yesPrice) * 100);
+        return EnterprisePanel(
+          title: 'PredictFlow Companion Read',
+          subtitle:
+              'Local Dart engine snapshot for comparison against the primary live prediction stack.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
+                children: [
+                  StatusBadge(label: companion.title),
+                  StatusBadge(
+                    label:
+                        'PredictFlow YES ${(companion.yesPrice * 100).toStringAsFixed(1)}¢',
+                  ),
+                  StatusBadge(
+                    label:
+                        'Δ ${yesDelta >= 0 ? '+' : ''}${yesDelta.toStringAsFixed(1)}¢ vs primary',
+                    color: yesDelta.abs() <= 4
+                        ? AetherColors.success
+                        : AetherColors.warning,
+                  ),
+                  StatusBadge(
+                    label: 'Spread tier ${companion.spreadTier}',
+                    color: companion.spreadTier == 'HIGH'
+                        ? AetherColors.success
+                        : companion.spreadTier == 'MEDIUM'
+                            ? AetherColors.warning
+                            : AetherColors.critical,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
+                children: [
+                  _metricTile('Companion Liquidity',
+                      formatUsd(companion.liquidityUsd)),
+                  _metricTile('Companion 24h Volume',
+                      formatUsd(companion.volume24h)),
+                  _metricTile(
+                      'Resolution Source', companion.resolutionSource),
+                  _metricTile(
+                      'State', companion.resolved ? 'Resolved' : 'Live'),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const EnterprisePanel(
+        title: 'PredictFlow Companion Read',
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => EnterprisePanel(
+        title: 'PredictFlow Companion Read',
+        child: Text(
+          'Unable to load PredictFlow companion market: $error',
+          style: const TextStyle(color: AetherColors.critical),
+        ),
+      ),
+    );
+  }
+
+  PredictFlowMarketSnapshot? _selectPredictFlowMarket(
+    Market market,
+    List<PredictFlowMarketSnapshot> markets,
+  ) {
+    if (markets.isEmpty) return null;
+    for (final item in markets) {
+      if (item.category.toLowerCase() == market.category.toLowerCase()) {
+        return item;
+      }
+    }
+    return markets.first;
   }
 
   Widget _liquidityRiskPanel(AsyncValue<LiquidityDetail> liquidityValue) {
@@ -838,6 +982,210 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
 
   String _cents(double probability) =>
       '${(probability * 100).toStringAsFixed(0)}c';
+}
+
+class _PredictFlowOrderDialog extends StatefulWidget {
+  const _PredictFlowOrderDialog({
+    required this.market,
+    required this.walletAddress,
+    required this.apiClient,
+  });
+
+  final PredictFlowMarketSnapshot market;
+  final String walletAddress;
+  final ApiClient apiClient;
+
+  @override
+  State<_PredictFlowOrderDialog> createState() => _PredictFlowOrderDialogState();
+}
+
+class _PredictFlowOrderDialogState extends State<_PredictFlowOrderDialog> {
+  String _outcome = 'YES';
+  String _side = 'BUY';
+  double _shares = 10;
+  bool _submitting = false;
+  late Future<PredictFlowPreview> _previewFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _previewFuture = _loadPreview();
+  }
+
+  Future<PredictFlowPreview> _loadPreview() {
+    return widget.apiClient.previewPredictFlowOrder(
+      marketId: widget.market.id,
+      outcome: _outcome,
+      side: _side,
+      shares: _shares,
+    );
+  }
+
+  void _refreshPreview() {
+    setState(() {
+      _previewFuture = _loadPreview();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AetherColors.bgElevated,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AetherRadii.lg),
+        side: const BorderSide(color: AetherColors.border),
+      ),
+      title: Text('PredictFlow Simulation • ${widget.market.title}'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
+                children: [
+                  StatusBadge(
+                      label:
+                          'YES ${(widget.market.yesPrice * 100).toStringAsFixed(1)}¢'),
+                  StatusBadge(
+                      label:
+                          'NO ${(widget.market.noPrice * 100).toStringAsFixed(1)}¢'),
+                  StatusBadge(
+                    label: 'Spread ${widget.market.spreadTier}',
+                    color: widget.market.spreadTier == 'HIGH'
+                        ? AetherColors.success
+                        : widget.market.spreadTier == 'MEDIUM'
+                            ? AetherColors.warning
+                            : AetherColors.critical,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'BUY', label: Text('Buy')),
+                  ButtonSegment(value: 'SELL', label: Text('Sell')),
+                ],
+                selected: {_side},
+                onSelectionChanged: (selection) {
+                  _side = selection.first;
+                  _refreshPreview();
+                },
+              ),
+              const SizedBox(height: AetherSpacing.sm),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'YES', label: Text('YES')),
+                  ButtonSegment(value: 'NO', label: Text('NO')),
+                ],
+                selected: {_outcome},
+                onSelectionChanged: (selection) {
+                  _outcome = selection.first;
+                  _refreshPreview();
+                },
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              Text('Shares: ${_shares.toStringAsFixed(0)}'),
+              Slider(
+                min: 1,
+                max: 100,
+                divisions: 99,
+                value: _shares,
+                label: _shares.toStringAsFixed(0),
+                onChanged: (value) {
+                  _shares = value;
+                  _refreshPreview();
+                },
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              FutureBuilder<PredictFlowPreview>(
+                future: _previewFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Text(
+                      snapshot.error.toString(),
+                      style: const TextStyle(color: AetherColors.critical),
+                    );
+                  }
+                  final preview = snapshot.data;
+                  if (preview == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return Container(
+                    padding: const EdgeInsets.all(AetherSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AetherColors.bgPanel,
+                      borderRadius: BorderRadius.circular(AetherRadii.md),
+                      border: Border.all(color: AetherColors.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Preview',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: AetherSpacing.sm),
+                        Text(
+                          _side == 'BUY'
+                              ? 'Estimated fill ${preview.sharesOut.toStringAsFixed(2)} shares at ${preview.avgPrice.toStringAsFixed(4)}'
+                              : 'Estimated collateral out ${preview.collateralOut.toStringAsFixed(4)} at ${preview.avgPrice.toStringAsFixed(4)}',
+                        ),
+                        const SizedBox(height: AetherSpacing.xs),
+                        Text(
+                          'Price impact ${(preview.priceImpact * 100).toStringAsFixed(2)}%',
+                          style: const TextStyle(color: AetherColors.muted),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submitting
+              ? null
+              : () async {
+                  final navigator = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  setState(() => _submitting = true);
+                  try {
+                    await widget.apiClient.placePredictFlowOrder(
+                      marketId: widget.market.id,
+                      wallet: widget.walletAddress,
+                      outcome: _outcome,
+                      side: _side,
+                      shares: _shares,
+                    );
+                    if (!mounted) return;
+                    navigator.pop(true);
+                  } catch (error) {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('PredictFlow order failed: $error')),
+                    );
+                    setState(() => _submitting = false);
+                  }
+                },
+          child: Text(_submitting ? 'Submitting...' : 'Place Simulation Order'),
+        ),
+      ],
+    );
+  }
 }
 
 class _EvidenceImpactRow {

@@ -951,6 +951,178 @@ class VaultPerformancePoint {
   }
 }
 
+class PredictFlowHealth {
+  const PredictFlowHealth({
+    required this.status,
+    required this.service,
+    required this.markets,
+  });
+
+  final String status;
+  final String service;
+  final int markets;
+
+  factory PredictFlowHealth.fromJson(Map<String, dynamic> json) {
+    return PredictFlowHealth(
+      status: (json['status'] as String?) ?? 'unknown',
+      service: (json['service'] as String?) ?? 'predictflow-dart',
+      markets: _readInt(json['markets']) ?? 0,
+    );
+  }
+}
+
+class PredictFlowMarketSnapshot {
+  const PredictFlowMarketSnapshot({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.yesPrice,
+    required this.noPrice,
+    required this.spreadTier,
+    required this.liquidityUsd,
+    required this.volume24h,
+    required this.resolutionSource,
+    required this.resolved,
+  });
+
+  final String id;
+  final String title;
+  final String category;
+  final double yesPrice;
+  final double noPrice;
+  final String spreadTier;
+  final double liquidityUsd;
+  final double volume24h;
+  final String resolutionSource;
+  final bool resolved;
+
+  factory PredictFlowMarketSnapshot.fromJson(Map<String, dynamic> json) {
+    return PredictFlowMarketSnapshot(
+      id: (json['id'] as String?) ?? '',
+      title: (json['title'] as String?) ?? 'Untitled market',
+      category: (json['category'] as String?) ?? 'Prediction',
+      yesPrice: (_readDouble(json['yesPrice']) ?? 0.5).toDouble(),
+      noPrice: (_readDouble(json['noPrice']) ?? 0.5).toDouble(),
+      spreadTier: (json['spreadTier'] as String?) ?? 'UNKNOWN',
+      liquidityUsd: (_readDouble(json['liquidityUsd']) ?? 0).toDouble(),
+      volume24h: (_readDouble(json['volume24h']) ?? 0).toDouble(),
+      resolutionSource:
+          (json['resolutionSource'] as String?) ?? 'PredictFlow engine',
+      resolved: (json['resolved'] as bool?) ?? false,
+    );
+  }
+}
+
+class PredictFlowPosition {
+  const PredictFlowPosition({
+    required this.marketId,
+    required this.title,
+    required this.outcome,
+    required this.shares,
+    required this.avgEntry,
+    required this.markPrice,
+    required this.unrealizedPnl,
+  });
+
+  final String marketId;
+  final String title;
+  final String outcome;
+  final double shares;
+  final double avgEntry;
+  final double markPrice;
+  final double unrealizedPnl;
+
+  factory PredictFlowPosition.fromJson(Map<String, dynamic> json) {
+    return PredictFlowPosition(
+      marketId: (json['marketId'] as String?) ?? '',
+      title: (json['title'] as String?) ?? 'Untitled market',
+      outcome: (json['outcome'] as String?) ?? 'YES',
+      shares: (_readDouble(json['shares']) ?? 0).toDouble(),
+      avgEntry: (_readDouble(json['avgEntry']) ?? 0).toDouble(),
+      markPrice: (_readDouble(json['markPrice']) ?? 0).toDouble(),
+      unrealizedPnl: (_readDouble(json['unrealizedPnl']) ?? 0).toDouble(),
+    );
+  }
+}
+
+class PredictFlowPortfolio {
+  const PredictFlowPortfolio({
+    required this.wallet,
+    required this.collateralBalance,
+    required this.realizedPnl,
+    required this.positions,
+  });
+
+  final String wallet;
+  final double collateralBalance;
+  final double realizedPnl;
+  final List<PredictFlowPosition> positions;
+
+  factory PredictFlowPortfolio.fromJson(Map<String, dynamic> json) {
+    return PredictFlowPortfolio(
+      wallet: (json['wallet'] as String?) ?? 'predictflow-wallet',
+      collateralBalance: (_readDouble(json['collateralBalance']) ?? 0).toDouble(),
+      realizedPnl: (_readDouble(json['realizedPnl']) ?? 0).toDouble(),
+      positions: (json['positions'] as List<dynamic>? ?? [])
+          .map((item) => PredictFlowPosition.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ))
+          .toList(),
+    );
+  }
+}
+
+class PredictFlowPreview {
+  const PredictFlowPreview({
+    required this.sharesOut,
+    required this.avgPrice,
+    required this.priceImpact,
+    required this.collateralOut,
+  });
+
+  final double sharesOut;
+  final double avgPrice;
+  final double priceImpact;
+  final double collateralOut;
+
+  factory PredictFlowPreview.fromJson(Map<String, dynamic> json) {
+    return PredictFlowPreview(
+      sharesOut: (_readDouble(json['sharesOut']) ?? 0).toDouble(),
+      avgPrice: (_readDouble(json['avgPrice']) ?? 0).toDouble(),
+      priceImpact: (_readDouble(json['priceImpact']) ?? 0).toDouble(),
+      collateralOut: (_readDouble(json['collateralOut']) ?? 0).toDouble(),
+    );
+  }
+}
+
+class PredictFlowOrderResult {
+  const PredictFlowOrderResult({
+    required this.orderId,
+    required this.marketId,
+    required this.fillCount,
+    required this.wallet,
+    required this.snapshot,
+  });
+
+  final String orderId;
+  final String marketId;
+  final int fillCount;
+  final String wallet;
+  final PredictFlowMarketSnapshot snapshot;
+
+  factory PredictFlowOrderResult.fromJson(Map<String, dynamic> json) {
+    final order = Map<String, dynamic>.from((json['order'] as Map?) ?? const {});
+    final snapshot = Map<String, dynamic>.from((json['snapshot'] as Map?) ?? const {});
+    return PredictFlowOrderResult(
+      orderId: (order['id'] as String?) ?? '',
+      marketId: (order['marketId'] as String?) ?? '',
+      fillCount: (json['fills'] as List<dynamic>? ?? const []).length,
+      wallet: (order['wallet'] as String?) ?? 'demo-wallet',
+      snapshot: PredictFlowMarketSnapshot.fromJson(snapshot),
+    );
+  }
+}
+
 class CopyRelationshipModel {
   const CopyRelationshipModel({
     required this.id,

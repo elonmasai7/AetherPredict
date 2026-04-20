@@ -47,6 +47,18 @@ final selectedMarketLiquidityProvider = FutureProvider<LiquidityDetail>((ref) as
 });
 final liquidityDashboardProvider = FutureProvider<LiquidityDashboard>(
     (ref) async => ref.read(apiClientProvider).fetchLiquidityDashboard());
+final predictFlowHealthProvider = FutureProvider<PredictFlowHealth>(
+    (ref) async => ref.read(apiClientProvider).fetchPredictFlowHealth());
+final predictFlowMarketsProvider = FutureProvider<List<PredictFlowMarketSnapshot>>(
+    (ref) async => ref.read(apiClientProvider).fetchPredictFlowMarkets());
+final predictFlowDashboardProvider =
+    FutureProvider<PredictFlowPortfolio>((ref) async {
+  final wallet = ref.watch(walletSessionProvider);
+  final walletId = (wallet.address != null && wallet.address!.isNotEmpty)
+      ? wallet.address!
+      : 'demo-wallet';
+  return ref.read(apiClientProvider).fetchPredictFlowDashboard(walletId);
+});
 
 final agentListProvider = FutureProvider<List<AgentCardModel>>(
     (ref) async => ref.read(apiClientProvider).fetchAgents());

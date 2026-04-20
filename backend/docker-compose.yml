@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: predictodds-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: predictodds
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - predictodds_pg:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: predictodds-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: predictodds-api
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    command: >
+      sh -c "python seed.py --ensure-db &&
+             uvicorn main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  predictodds_pg:
