@@ -5,8 +5,14 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.entities import AssetSnapshot, Market, Notification
 from app.schemas.asset import AssetSnapshotResponse
-from app.schemas.market import CreateMarketRequest, MarketResponse
+from app.schemas.market import (
+    CreateMarketRequest,
+    LiquidityDashboardResponse,
+    LiquidityDetailResponse,
+    MarketResponse,
+)
 from app.services.auth_service import get_current_user, get_optional_user, get_or_create_wallet_user
+from app.services.liquidity_engine import LiquidityIntelligenceService
 from app.services.market_stream import publish_market_update
 
 router = APIRouter(prefix="/markets", tags=["markets"])
@@ -15,7 +21,19 @@ router = APIRouter(prefix="/markets", tags=["markets"])
 @router.get("", response_model=list[MarketResponse])
 def list_markets(db: Session = Depends(get_db)) -> list[MarketResponse]:
     markets = db.scalars(select(Market).order_by(Market.updated_at.desc())).all()
-    return [MarketResponse.model_validate(market, from_attributes=True) for market in markets]
+    service = LiquidityIntelligenceService(db)
+    responses: list[MarketResponse] = []
+    for market in markets:
+        response = MarketResponse.model_validate(market, from_attributes=True)
+        response.liquidity_intelligence = service.build_market_snapshot(market).summary
+        responses.append(response)
+    return responses
+
+
+@router.get("/liquidity/dashboard", response_model=LiquidityDashboardResponse)
+def liquidity_dashboard(db: Session = Depends(get_db)) -> LiquidityDashboardResponse:
+    service = LiquidityIntelligenceService(db)
+    return LiquidityDashboardResponse.model_validate(service.build_dashboard())
 
 
 @router.get("/assets", response_model=list[AssetSnapshotResponse])
@@ -29,7 +47,18 @@ def get_market(market_id: int, db: Session = Depends(get_db)) -> MarketResponse:
     market = db.scalar(select(Market).where(Market.id == market_id))
     if market is None:
         raise HTTPException(status_code=404, detail="Market not found")
-    return MarketResponse.model_validate(market, from_attributes=True)
+    response = MarketResponse.model_validate(market, from_attributes=True)
+    response.liquidity_intelligence = LiquidityIntelligenceService(db).build_market_snapshot(market).summary
+    return response
+
+
+@router.get("/{market_id}/liquidity", response_model=LiquidityDetailResponse)
+def get_market_liquidity(market_id: int, db: Session = Depends(get_db)) -> LiquidityDetailResponse:
+    market = db.scalar(select(Market).where(Market.id == market_id))
+    if market is None:
+        raise HTTPException(status_code=404, detail="Market not found")
+    snapshot = LiquidityIntelligenceService(db).build_market_snapshot(market)
+    return LiquidityDetailResponse(market_id=market.id, liquidity_intelligence=snapshot.detail)
 
 
 @router.post("", response_model=MarketResponse, status_code=201)
@@ -59,7 +88,11 @@ async def create_market(
         resolution_rules=payload.resolution_rules,
         collateral_token=payload.collateral_token,
         creator_user_id=user.id,
-        metadata_json={"creation_mode": "api"},
+        metadata_json={
+            "creation_mode": "api",
+            "probability_points": [0.46, 0.48, 0.5, 0.5],
+            "event_importance": "standard",
+        },
     )
     db.add(market)
     db.add(
@@ -88,4 +121,6 @@ def link_market(market_id: int, payload: dict, db: Session = Depends(get_db), us
     market.on_chain_address = address
     db.commit()
     db.refresh(market)
-    return MarketResponse.model_validate(market, from_attributes=True)
+    response = MarketResponse.model_validate(market, from_attributes=True)
+    response.liquidity_intelligence = LiquidityIntelligenceService(db).build_market_snapshot(market).summary
+    return response

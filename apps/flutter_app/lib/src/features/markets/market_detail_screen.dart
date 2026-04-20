@@ -24,6 +24,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
     final selected = ref.watch(selectedMarketProvider);
     final sentimentValue = ref.watch(sentimentFeedProvider);
     final copilotValue = ref.watch(copilotProvider);
+    final liquidityValue = ref.watch(selectedMarketLiquidityProvider);
     final wallet = ref.watch(walletSessionProvider);
 
     return AppScaffold(
@@ -39,6 +40,10 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
               const SizedBox(height: AetherSpacing.lg),
               _probabilityTrendPanel(market, points),
               const SizedBox(height: AetherSpacing.lg),
+              _liquidityOverviewPanel(market, liquidityValue),
+              const SizedBox(height: AetherSpacing.lg),
+              _liquidityDepthPanel(liquidityValue),
+              const SizedBox(height: AetherSpacing.lg),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final compact = constraints.maxWidth < 1220;
@@ -46,6 +51,8 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                     return Column(
                       children: [
                         _aiConsensusPanel(copilotValue),
+                        const SizedBox(height: AetherSpacing.lg),
+                        _liquidityRiskPanel(liquidityValue),
                         const SizedBox(height: AetherSpacing.lg),
                         _resolutionWorkflowPanel(market),
                       ],
@@ -55,6 +62,8 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(child: _aiConsensusPanel(copilotValue)),
+                      const SizedBox(width: AetherSpacing.lg),
+                      Expanded(child: _liquidityRiskPanel(liquidityValue)),
                       const SizedBox(width: AetherSpacing.lg),
                       Expanded(child: _resolutionWorkflowPanel(market)),
                     ],
@@ -81,6 +90,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
   }
 
   Widget _heroPanel(Market market) {
+    final spread = market.liquidityIntelligence;
     return EnterprisePanel(
       title: market.title,
       subtitle:
@@ -113,9 +123,9 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
             children: [
               _metricTile('Resolution Window', _formatExpiry(market.expiry)),
               _metricTile('Event Liquidity', formatUsd(market.liquidity)),
+              _metricTile('Spread', '${spread.spreadWidthCents}c • ${spread.liquidityLabel}'),
               _metricTile('Participants', market.participantCount.toString()),
-              _metricTile(
-                  'Risk Score', '${market.riskScore.toStringAsFixed(0)}/100'),
+              _metricTile('Liquidity Risk', spread.riskLabel),
             ],
           ),
         ],
@@ -392,6 +402,7 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
   }
 
   Widget _actionPanel(Market market, bool walletConnected) {
+    final spread = market.liquidityIntelligence;
     return EnterprisePanel(
       title: 'Forecast Actions',
       subtitle:
@@ -405,6 +416,29 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                 : 'Connect wallet to open positions',
             color:
                 walletConnected ? AetherColors.success : AetherColors.warning,
+          ),
+          const SizedBox(height: AetherSpacing.md),
+          Wrap(
+            spacing: AetherSpacing.sm,
+            runSpacing: AetherSpacing.sm,
+            children: [
+              StatusBadge(
+                label:
+                    'Best YES bid ${_cents(spread.bestYesBid)} • ask ${_cents(spread.bestYesAsk)}',
+              ),
+              StatusBadge(
+                label:
+                    'Implied NO ${_cents(spread.impliedNoBid)} / ${_cents(spread.impliedNoAsk)}',
+              ),
+              StatusBadge(
+                label: 'Spread: ${spread.spreadWidthCents}c (${spread.liquidityLabel})',
+                color: spread.spreadWidthCents <= 2
+                    ? AetherColors.success
+                    : spread.spreadWidthCents <= 5
+                        ? AetherColors.accent
+                        : AetherColors.warning,
+              ),
+            ],
           ),
           const SizedBox(height: AetherSpacing.md),
           Row(
@@ -449,6 +483,242 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _liquidityOverviewPanel(
+      Market market, AsyncValue<LiquidityDetail> liquidityValue) {
+    return liquidityValue.when(
+      data: (detail) {
+        final concentration = detail.concentration;
+        final shock = detail.informationShock;
+        final eventDriven = detail.eventDriven;
+        final expiry = detail.expiryDecay;
+        return EnterprisePanel(
+          title: 'Liquidity Intelligence Overview',
+          subtitle:
+              'Probability-based spreads, event support, concentration risk, and execution conditions for this binary market.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
+                children: [
+                  StatusBadge(
+                      label:
+                          'Spread: ${detail.spread.spreadWidthCents}c (${detail.spread.liquidityLabel})'),
+                  StatusBadge(
+                      label:
+                          'Liquidity score ${detail.liquidityScore.toStringAsFixed(1)}'),
+                  StatusBadge(
+                    label: shock['status']?.toString() ?? 'Stable',
+                    color: (shock['status']?.toString() == 'Shock Active')
+                        ? AetherColors.warning
+                        : AetherColors.success,
+                  ),
+                  StatusBadge(
+                      label: eventDriven['profile']?.toString() ??
+                          'Standard'),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
+                children: [
+                  _metricTile('Best YES Bid', _cents(detail.spread.bestYesBid)),
+                  _metricTile('Best YES Ask', _cents(detail.spread.bestYesAsk)),
+                  _metricTile(
+                      'Implied NO',
+                      '${_cents(detail.spread.impliedNoBid)} / ${_cents(detail.spread.impliedNoAsk)}'),
+                  _metricTile(
+                    'LP Concentration',
+                    '${((concentration['top_providers_share_pct'] as num?) ?? 0).toStringAsFixed(1)}%',
+                  ),
+                ],
+              ),
+              if ((expiry['warning'] as String?) != null) ...[
+                const SizedBox(height: AetherSpacing.md),
+                Text(
+                  expiry['warning'] as String,
+                  style: const TextStyle(
+                    color: AetherColors.warning,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+      loading: () => const EnterprisePanel(
+        title: 'Liquidity Intelligence Overview',
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => EnterprisePanel(
+        title: 'Liquidity Intelligence Overview',
+        child: Text(error.toString(),
+            style: const TextStyle(color: AetherColors.critical)),
+      ),
+    );
+  }
+
+  Widget _liquidityDepthPanel(AsyncValue<LiquidityDetail> liquidityValue) {
+    return liquidityValue.when(
+      data: (detail) {
+        final depth = detail.depth;
+        final distribution =
+            (depth['order_distribution'] as List<dynamic>? ?? const []);
+        return EnterprisePanel(
+          title: 'Probability Depth',
+          subtitle:
+              'Prediction-market depth ladder across probabilities, YES/NO pool imbalance, and cumulative liquidity.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
+                children: [
+                  _metricTile('YES Depth',
+                      formatUsd((depth['yes_depth_total'] as num?)?.toDouble() ?? 0)),
+                  _metricTile('NO Depth',
+                      formatUsd((depth['no_depth_total'] as num?)?.toDouble() ?? 0)),
+                  _metricTile(
+                      'Imbalance Ratio',
+                      ((depth['imbalance_ratio'] as num?) ?? 0)
+                          .toStringAsFixed(2)),
+                  _metricTile(
+                      'Depth Score',
+                      ((depth['depth_score'] as num?) ?? 0).toStringAsFixed(1)),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              ...distribution.take(8).map((row) {
+                final map = Map<String, dynamic>.from(row as Map);
+                final yesDepth = (map['yes_depth'] as num?)?.toDouble() ?? 0;
+                final noDepth = (map['no_depth'] as num?)?.toDouble() ?? 0;
+                final maxDepth = yesDepth > noDepth ? yesDepth : noDepth;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AetherSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'P ${(map['probability'] as num?)?.toStringAsFixed(2) ?? '0.00'} • YES ${yesDepth.toStringAsFixed(0)} • NO ${noDepth.toStringAsFixed(0)}',
+                        style: const TextStyle(color: AetherColors.muted),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: LinearProgressIndicator(
+                              value: maxDepth == 0 ? 0 : yesDepth / maxDepth,
+                              minHeight: 8,
+                              color: AetherColors.success,
+                              backgroundColor: AetherColors.bgPanel,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          const SizedBox(width: AetherSpacing.sm),
+                          Expanded(
+                            child: LinearProgressIndicator(
+                              value: maxDepth == 0 ? 0 : noDepth / maxDepth,
+                              minHeight: 8,
+                              color: AetherColors.critical,
+                              backgroundColor: AetherColors.bgPanel,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+      loading: () => const EnterprisePanel(
+        title: 'Probability Depth',
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => EnterprisePanel(
+        title: 'Probability Depth',
+        child: Text(error.toString(),
+            style: const TextStyle(color: AetherColors.critical)),
+      ),
+    );
+  }
+
+  Widget _liquidityRiskPanel(AsyncValue<LiquidityDetail> liquidityValue) {
+    return liquidityValue.when(
+      data: (detail) {
+        final risk = detail.risk;
+        final concentration = detail.concentration;
+        final retail = detail.retail;
+        final marketMaker = detail.marketMaker;
+        final shock = detail.informationShock;
+        return EnterprisePanel(
+          title: 'Liquidity Risk & Execution',
+          subtitle:
+              'Unified risk score, micro-position routing, concentration diagnostics, and AI market maker behavior.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AetherSpacing.sm,
+                runSpacing: AetherSpacing.sm,
+                children: [
+                  StatusBadge(label: risk['label']?.toString() ?? 'Medium Risk'),
+                  StatusBadge(
+                      label:
+                          concentration['summary']?.toString() ?? 'LP distribution unavailable'),
+                  StatusBadge(
+                      label:
+                          'Retail slippage ${(((retail['micro_trade_preview'] as Map?)?['slippage_pct'] as num?) ?? 0).toStringAsFixed(2)}%'),
+                ],
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              Text(
+                shock['action']?.toString() ??
+                    'AI market maker monitoring event liquidity.',
+                style: const TextStyle(color: AetherColors.muted),
+              ),
+              const SizedBox(height: AetherSpacing.md),
+              _workflowRow(
+                step: 'MM',
+                title: marketMaker['mode']?.toString() ?? 'AI Market Maker',
+                description:
+                    'Target spread ${marketMaker['target_spread_cents'] ?? '--'}c • inventory bias ${marketMaker['inventory_bias'] ?? 'Balanced'}',
+              ),
+              _workflowRow(
+                step: 'LP',
+                title: 'Liquidity concentration',
+                description:
+                    'Top LP share ${((concentration['top_providers_share_pct'] as num?) ?? 0).toStringAsFixed(1)}% • decentralization ${(concentration['decentralization_index'] as num?)?.toStringAsFixed(1) ?? '--'}',
+              ),
+              _workflowRow(
+                step: 'RT',
+                title: 'Retail participation model',
+                description:
+                    'Micro-position ticket ${(retail['micro_trade_preview'] as Map?)?['ticket_size_usd'] ?? 0} USD with minimal slippage routing.',
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const EnterprisePanel(
+        title: 'Liquidity Risk & Execution',
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => EnterprisePanel(
+        title: 'Liquidity Risk & Execution',
+        child: Text(error.toString(),
+            style: const TextStyle(color: AetherColors.critical)),
       ),
     );
   }
@@ -565,6 +835,9 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
     return ((liquidityFactor + participantFactor + market.aiConfidence) / 3) *
         100;
   }
+
+  String _cents(double probability) =>
+      '${(probability * 100).toStringAsFixed(0)}c';
 }
 
 class _EvidenceImpactRow {

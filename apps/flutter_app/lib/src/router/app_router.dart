@@ -8,6 +8,7 @@ import '../features/dashboard/dashboard_screen.dart';
 import '../features/disputes/dispute_center_screen.dart';
 import '../features/leaderboard/leaderboard_screen.dart';
 import '../features/markets/market_detail_screen.dart';
+import '../features/markets/liquidity_dashboard_screen.dart';
 import '../features/markets/market_list_screen.dart';
 import '../features/markets/trade_screen.dart';
 import '../features/notifications/notifications_screen.dart';
@@ -43,6 +44,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/ai-forecast-engine',
       builder: (_, __) => const MarketDetailScreen(),
+    ),
+    GoRoute(
+      path: '/liquidity-intelligence',
+      builder: (_, __) => const LiquidityDashboardScreen(),
     ),
     GoRoute(
       path: '/create-prediction',
@@ -145,6 +150,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/vaults',
       redirect: (_, __) => '/liquidity-vaults',
+    ),
+    GoRoute(
+      path: '/liquidity',
+      redirect: (_, __) => '/liquidity-intelligence',
     ),
     GoRoute(
       path: '/copy-trading',

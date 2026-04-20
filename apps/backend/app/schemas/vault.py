@@ -41,6 +41,7 @@ class VaultResponse(BaseModel):
     active_subscribers: int
     total_aum: float
     status: str
+    smart_liquidity: dict | None = None
 
 
 class VaultSubscriptionRequest(BaseModel):

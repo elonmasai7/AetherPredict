@@ -31,6 +31,8 @@ const _navItems = [
   _NavItem('AI Forecast Engine', '/ai-forecast-engine',
       Icons.psychology_alt_rounded),
   _NavItem(
+      'Liquidity Intelligence', '/liquidity-intelligence', Icons.waterfall_chart_rounded),
+  _NavItem(
       'Strategy Engine', '/strategy-engine', Icons.hub_outlined),
   _NavItem('Autonomous Agents', '/autonomous-agents', Icons.smart_toy_outlined),
   _NavItem(

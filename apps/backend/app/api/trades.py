@@ -14,6 +14,7 @@ from app.services.auth_service import get_current_user, get_optional_user, get_o
 from app.services.copy_trading_service import CopyTradingService
 from app.services.blockchain_service import BlockchainService
 from app.services.copy_trading_service import CopyTradingService
+from app.services.liquidity_engine import LiquidityIntelligenceService
 
 router = APIRouter(prefix="/trades", tags=["trades"])
 
@@ -63,7 +64,12 @@ def prepare_trade(payload: PrepareTradeRequest, db: Session = Depends(get_db), u
         "nonce": hex(built.nonce) if built.nonce is not None else None,
         "chainId": built.chain_id,
     }
-    return PrepareTradeResponse(trade_id=trade.id, tx=tx)
+    preview = LiquidityIntelligenceService(db).build_slippage_preview(
+        market,
+        payload.side,
+        payload.collateral_amount,
+    )
+    return PrepareTradeResponse(trade_id=trade.id, tx=tx, liquidity_preview=preview)
 
 
 @router.post("", response_model=TradeResponse, status_code=201)
@@ -74,6 +80,12 @@ def create_trade(payload: CreateTradeRequest, db: Session = Depends(get_db), use
     if market is None:
         raise HTTPException(status_code=404, detail="Market not found")
 
+    liquidity_service = LiquidityIntelligenceService(db)
+    liquidity_preview = liquidity_service.build_slippage_preview(
+        market,
+        payload.side,
+        payload.collateral_amount,
+    )
     shares = round(payload.collateral_amount / max(payload.price, 0.0001), 6)
     trade = TradeOrder(
         user_id=user.id,
@@ -90,6 +102,7 @@ def create_trade(payload: CreateTradeRequest, db: Session = Depends(get_db), use
         explorer_url=None,
         gas_estimate=0.0012,
         gas_fee_native=None,
+        metadata_json={"liquidity_preview": liquidity_preview},
     )
     db.add(trade)
 
@@ -152,7 +165,9 @@ def create_trade(payload: CreateTradeRequest, db: Session = Depends(get_db), use
             )
     except Exception:
         pass
-    return TradeResponse.model_validate(trade, from_attributes=True)
+    response = TradeResponse.model_validate(trade, from_attributes=True)
+    response.liquidity_preview = liquidity_preview
+    return response
 
 
 @router.post("/{trade_id}/submit", response_model=TradeResponse)
@@ -186,4 +201,6 @@ def submit_trade_hash(trade_id: int, payload: dict, db: Session = Depends(get_db
     db.add(tx_row)
     db.commit()
     db.refresh(trade)
-    return TradeResponse.model_validate(trade, from_attributes=True)
+    response = TradeResponse.model_validate(trade, from_attributes=True)
+    response.liquidity_preview = trade.metadata_json.get("liquidity_preview")
+    return response

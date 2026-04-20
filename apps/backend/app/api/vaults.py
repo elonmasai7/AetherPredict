@@ -365,6 +365,11 @@ def execute_vault_strategy(payload: ExecuteVaultStrategyRequest, db: Session = D
 def _to_response(db: Session, vault) -> VaultResponse:
     market_ids = [item.market_id for item in vault.markets]
     markets = db.scalars(select(Market).where(Market.id.in_(market_ids))).all() if market_ids else []
+    market_count = max(len(markets), len(vault.target_markets_json), 1)
+    yes_share = float(vault.current_allocation_json.get("yes_pool_pct", 0.54))
+    no_share = float(vault.current_allocation_json.get("no_pool_pct", 0.46))
+    fee_apr = round((vault.management_fee_bps / 10000) * 0.35 + max(vault.roi_30d, 0) * 1.4, 4)
+    reward_apr = round(max(vault.ai_confidence_score, 0.2) * 0.08, 4)
     return VaultResponse(
         id=vault.id,
         title=vault.title,
@@ -385,4 +390,15 @@ def _to_response(db: Session, vault) -> VaultResponse:
         active_subscribers=vault.active_subscribers,
         total_aum=vault.total_aum,
         status=vault.status,
+        smart_liquidity={
+            "yes_pool_pct": round(yes_share * 100, 1) if yes_share <= 1 else round(yes_share, 1),
+            "no_pool_pct": round(no_share * 100, 1) if no_share <= 1 else round(no_share, 1),
+            "auto_rebalance": vault.auto_execute_enabled,
+            "ai_managed_exposure": vault.manager_type.upper() == "AI",
+            "dynamic_fee_apr": fee_apr,
+            "aeth_reward_apr": reward_apr,
+            "market_count": market_count,
+            "liquidity_policy": "Institutional prediction-market making",
+            "summary": "AI-managed YES/NO liquidity pools with fee optimization and outcome rebalancing.",
+        },
     )

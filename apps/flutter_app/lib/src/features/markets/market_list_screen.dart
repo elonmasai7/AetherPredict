@@ -92,6 +92,12 @@ class _MarketListScreenState extends ConsumerState<MarketListScreen> {
                       ),
                     ),
                     FilledButton.icon(
+                      onPressed: () => context.go('/liquidity-intelligence'),
+                      icon: const Icon(Icons.waterfall_chart_rounded),
+                      label: const Text('Liquidity Dashboard'),
+                    ),
+                    const SizedBox(width: AetherSpacing.sm),
+                    FilledButton.icon(
                       onPressed: () => context.go('/create-prediction'),
                       icon: const Icon(Icons.add_chart_rounded),
                       label: const Text('Create Prediction'),
@@ -156,6 +162,15 @@ class _MarketListScreenState extends ConsumerState<MarketListScreen> {
                       'AI confidence ${(market.aiConfidence * 100).toStringAsFixed(1)}%'),
               StatusBadge(
                   label: 'Liquidity pool ${formatUsd(market.liquidity)}'),
+              StatusBadge(
+                label:
+                    'Spread: ${market.liquidityIntelligence.spreadWidthCents}c (${market.liquidityIntelligence.liquidityLabel})',
+                color: market.liquidityIntelligence.spreadWidthCents <= 2
+                    ? AetherColors.success
+                    : market.liquidityIntelligence.spreadWidthCents <= 5
+                        ? AetherColors.accent
+                        : AetherColors.warning,
+              ),
               StatusBadge(label: '${market.participantCount} participants'),
             ],
           ),

@@ -16,6 +16,7 @@ class Market {
     required this.volume,
     required this.liquidity,
     required this.points,
+    required this.liquidityIntelligence,
   });
 
   final String id;
@@ -34,6 +35,7 @@ class Market {
   final double volume;
   final double liquidity;
   final List<double> points;
+  final LiquiditySummary liquidityIntelligence;
 
   factory Market.fromJson(Map<String, dynamic> json) {
     final yesProbability = _safeProbability(json['yes_probability']);
@@ -74,6 +76,145 @@ class Market {
       volume: _readDouble(json['volume']) ?? 0,
       liquidity: _readDouble(json['liquidity']) ?? 0,
       points: points,
+      liquidityIntelligence: LiquiditySummary.fromJson(
+        Map<String, dynamic>.from(
+          (json['liquidity_intelligence'] as Map?) ?? const {},
+        ),
+        fallbackYesProbability: yesProbability,
+      ),
+    );
+  }
+}
+
+class LiquiditySummary {
+  const LiquiditySummary({
+    required this.bestYesBid,
+    required this.bestYesAsk,
+    required this.impliedNoBid,
+    required this.impliedNoAsk,
+    required this.spreadWidthCents,
+    required this.liquidityLabel,
+    required this.riskLabel,
+  });
+
+  final double bestYesBid;
+  final double bestYesAsk;
+  final double impliedNoBid;
+  final double impliedNoAsk;
+  final int spreadWidthCents;
+  final String liquidityLabel;
+  final String riskLabel;
+
+  factory LiquiditySummary.fromJson(
+    Map<String, dynamic> json, {
+    required double fallbackYesProbability,
+  }) {
+    final implied = Map<String, dynamic>.from(
+      (json['implied_no_spread'] as Map?) ?? const {},
+    );
+    final spread = _readInt(json['spread_width_cents']) ?? 4;
+    final bestBid =
+        _readDouble(json['best_yes_bid']) ?? (fallbackYesProbability - spread / 200);
+    final bestAsk =
+        _readDouble(json['best_yes_ask']) ?? (fallbackYesProbability + spread / 200);
+    return LiquiditySummary(
+      bestYesBid: bestBid.clamp(0, 1).toDouble(),
+      bestYesAsk: bestAsk.clamp(0, 1).toDouble(),
+      impliedNoBid: (_readDouble(implied['bid']) ?? (1 - bestAsk))
+          .clamp(0, 1)
+          .toDouble(),
+      impliedNoAsk: (_readDouble(implied['ask']) ?? (1 - bestBid))
+          .clamp(0, 1)
+          .toDouble(),
+      spreadWidthCents: spread,
+      liquidityLabel: (json['liquidity_label'] as String?) ?? 'Moderate Liquidity',
+      riskLabel: (json['risk_label'] as String?) ?? 'Medium Risk',
+    );
+  }
+}
+
+class LiquidityDetail {
+  const LiquidityDetail({
+    required this.spread,
+    required this.depth,
+    required this.concentration,
+    required this.eventDriven,
+    required this.expiryDecay,
+    required this.retail,
+    required this.informationShock,
+    required this.risk,
+    required this.marketMaker,
+    required this.liquidityScore,
+  });
+
+  final LiquiditySummary spread;
+  final Map<String, dynamic> depth;
+  final Map<String, dynamic> concentration;
+  final Map<String, dynamic> eventDriven;
+  final Map<String, dynamic> expiryDecay;
+  final Map<String, dynamic> retail;
+  final Map<String, dynamic> informationShock;
+  final Map<String, dynamic> risk;
+  final Map<String, dynamic> marketMaker;
+  final double liquidityScore;
+
+  factory LiquidityDetail.fromJson(Map<String, dynamic> json) {
+    final spread = Map<String, dynamic>.from((json['spread'] as Map?) ?? const {});
+    return LiquidityDetail(
+      spread: LiquiditySummary.fromJson(
+        spread,
+        fallbackYesProbability: (_readDouble(spread['best_yes_ask']) ?? 0.52),
+      ),
+      depth: Map<String, dynamic>.from((json['depth'] as Map?) ?? const {}),
+      concentration:
+          Map<String, dynamic>.from((json['concentration'] as Map?) ?? const {}),
+      eventDriven:
+          Map<String, dynamic>.from((json['event_driven'] as Map?) ?? const {}),
+      expiryDecay:
+          Map<String, dynamic>.from((json['expiry_decay'] as Map?) ?? const {}),
+      retail: Map<String, dynamic>.from((json['retail'] as Map?) ?? const {}),
+      informationShock: Map<String, dynamic>.from(
+        (json['information_shock'] as Map?) ?? const {},
+      ),
+      risk: Map<String, dynamic>.from((json['risk'] as Map?) ?? const {}),
+      marketMaker:
+          Map<String, dynamic>.from((json['market_maker'] as Map?) ?? const {}),
+      liquidityScore: (_readDouble(json['liquidity_score']) ?? 50).toDouble(),
+    );
+  }
+}
+
+class LiquidityDashboard {
+  const LiquidityDashboard({
+    required this.marketCount,
+    required this.marketRankings,
+    required this.spreadLeaderboard,
+    required this.mostLiquidMarkets,
+    required this.leastLiquidMarkets,
+    required this.lpDistribution,
+    required this.slippageHeatmap,
+  });
+
+  final int marketCount;
+  final List<Map<String, dynamic>> marketRankings;
+  final List<Map<String, dynamic>> spreadLeaderboard;
+  final List<Map<String, dynamic>> mostLiquidMarkets;
+  final List<Map<String, dynamic>> leastLiquidMarkets;
+  final List<Map<String, dynamic>> lpDistribution;
+  final List<Map<String, dynamic>> slippageHeatmap;
+
+  factory LiquidityDashboard.fromJson(Map<String, dynamic> json) {
+    List<Map<String, dynamic>> readRows(String key) => (json[key] as List<dynamic>? ?? [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
+    return LiquidityDashboard(
+      marketCount: _readInt(json['market_count']) ?? 0,
+      marketRankings: readRows('market_rankings'),
+      spreadLeaderboard: readRows('spread_leaderboard'),
+      mostLiquidMarkets: readRows('most_liquid_markets'),
+      leastLiquidMarkets: readRows('least_liquid_markets'),
+      lpDistribution: readRows('lp_distribution'),
+      slippageHeatmap: readRows('slippage_heatmap'),
     );
   }
 }
@@ -675,6 +816,7 @@ class VaultModel {
     required this.activeSubscribers,
     required this.totalAum,
     required this.status,
+    required this.smartLiquidity,
   });
 
   final int id;
@@ -696,6 +838,7 @@ class VaultModel {
   final int activeSubscribers;
   final double totalAum;
   final String status;
+  final Map<String, dynamic> smartLiquidity;
 
   factory VaultModel.fromJson(Map<String, dynamic> json) {
     return VaultModel(
@@ -723,6 +866,8 @@ class VaultModel {
       activeSubscribers: (json['active_subscribers'] as num).toInt(),
       totalAum: (json['total_aum'] as num).toDouble(),
       status: json['status'] as String,
+      smartLiquidity:
+          Map<String, dynamic>.from(json['smart_liquidity'] as Map? ?? {}),
     );
   }
 }

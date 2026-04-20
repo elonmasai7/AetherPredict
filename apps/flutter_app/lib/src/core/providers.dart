@@ -41,6 +41,12 @@ final selectedMarketFutureProvider = FutureProvider<Market>((ref) async {
   final selectedIndex = ref.watch(selectedMarketIndexProvider);
   return items[selectedIndex.clamp(0, items.length - 1)];
 });
+final selectedMarketLiquidityProvider = FutureProvider<LiquidityDetail>((ref) async {
+  final market = await ref.watch(selectedMarketFutureProvider.future);
+  return ref.read(apiClientProvider).fetchMarketLiquidity(market.id);
+});
+final liquidityDashboardProvider = FutureProvider<LiquidityDashboard>(
+    (ref) async => ref.read(apiClientProvider).fetchLiquidityDashboard());
 
 final agentListProvider = FutureProvider<List<AgentCardModel>>(
     (ref) async => ref.read(apiClientProvider).fetchAgents());

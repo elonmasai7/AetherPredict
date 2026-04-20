@@ -51,6 +51,21 @@ class ApiClient {
         .toList();
   }
 
+  Future<LiquidityDetail> fetchMarketLiquidity(String marketId) async {
+    final response = await _get('/markets/$marketId/liquidity');
+    final payload = _decodeMap(response, endpoint: '/markets/$marketId/liquidity');
+    return LiquidityDetail.fromJson(
+      Map<String, dynamic>.from(payload['liquidity_intelligence'] as Map? ?? {}),
+    );
+  }
+
+  Future<LiquidityDashboard> fetchLiquidityDashboard() async {
+    final response = await _get('/markets/liquidity/dashboard');
+    return LiquidityDashboard.fromJson(
+      _decodeMap(response, endpoint: '/markets/liquidity/dashboard'),
+    );
+  }
+
   Future<List<AgentCardModel>> fetchAgents() async {
     final response = await _get('/agents');
     final payload = _decodeList(response, endpoint: '/agents');

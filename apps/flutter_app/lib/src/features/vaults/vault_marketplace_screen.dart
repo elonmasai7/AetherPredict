@@ -140,6 +140,14 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                       cell: (row) => formatUsd(row.totalAum),
                       sortValue: (row) => row.totalAum,
                     ),
+                    EnterpriseTableColumn(
+                      label: 'YES / NO',
+                      width: 110,
+                      cell: (row) =>
+                          '${row.smartLiquidity['yes_pool_pct'] ?? '--'} / ${row.smartLiquidity['no_pool_pct'] ?? '--'}',
+                      sortValue: (row) =>
+                          (row.smartLiquidity['yes_pool_pct'] as num?) ?? 0,
+                    ),
                   ],
                   expandedBuilder: (row) => Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,6 +164,14 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                                 ? AetherColors.success
                                 : AetherColors.warning,
                           ),
+                          StatusBadge(
+                            label:
+                                'Fee APR ${(((row.smartLiquidity['dynamic_fee_apr'] as num?) ?? 0) * 100).toStringAsFixed(1)}%',
+                          ),
+                          StatusBadge(
+                            label:
+                                'AETH rewards ${(((row.smartLiquidity['aeth_reward_apr'] as num?) ?? 0) * 100).toStringAsFixed(1)}%',
+                          ),
                         ],
                       ),
                       const SizedBox(height: AetherSpacing.sm),
@@ -163,6 +179,12 @@ class VaultMarketplaceScreen extends ConsumerWidget {
                       const SizedBox(height: AetherSpacing.sm),
                       Text(
                         'Target prediction markets: ${row.targetMarkets.take(4).join(', ')}',
+                        style: const TextStyle(color: AetherColors.muted),
+                      ),
+                      const SizedBox(height: AetherSpacing.sm),
+                      Text(
+                        row.smartLiquidity['summary']?.toString() ??
+                            'AI-managed prediction-market liquidity vault.',
                         style: const TextStyle(color: AetherColors.muted),
                       ),
                     ],

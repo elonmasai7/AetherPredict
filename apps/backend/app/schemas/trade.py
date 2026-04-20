@@ -23,6 +23,7 @@ class PrepareTradeRequest(BaseModel):
 class PrepareTradeResponse(BaseModel):
     trade_id: int
     tx: dict
+    liquidity_preview: dict | None = None
 
 
 class TradeResponse(BaseModel):
@@ -38,4 +39,5 @@ class TradeResponse(BaseModel):
     gas_estimate: float | None = None
     gas_fee_native: float | None = None
     failure_reason: str | None = None
+    liquidity_preview: dict | None = None
     created_at: datetime
