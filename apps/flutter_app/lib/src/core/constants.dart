@@ -92,8 +92,8 @@ class AppConfig {
     final base = Uri.base;
     final isLocalHost = base.host == 'localhost' || base.host == '127.0.0.1';
 
-    // Local dev default: Flutter web server on :8080, backend on :8000.
-    if (isLocalHost && base.port == 8080) {
+    // Local dev default: Flutter web server on :3000 or :8080, backend on :8000.
+    if (isLocalHost && (base.port == 3000 || base.port == 8080)) {
       return Uri(
         scheme: base.scheme,
         host: base.host,

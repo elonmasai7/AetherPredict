@@ -152,6 +152,23 @@ class ApiClient {
     );
   }
 
+  Future<AiPredictionModel> runAgent({
+    required String prompt,
+    required String riskLevel,
+    required List<String> dataSources,
+    required bool automationEnabled,
+  }) async {
+    final response = await _post('/ai/run-agent', {
+      'prompt': prompt,
+      'risk_level': riskLevel,
+      'data_sources': dataSources,
+      'automation_enabled': automationEnabled,
+    });
+    return AiPredictionModel.fromJson(
+      _decodeMap(response, endpoint: '/ai/run-agent'),
+    );
+  }
+
   Future<LiquidityBookModel> fetchLiquidityBook(int marketId) async {
     final response = await _get('/liquidity/$marketId');
     return LiquidityBookModel.fromJson(
@@ -360,6 +377,14 @@ class ApiClient {
         .toList();
   }
 
+  Future<List<LeaderboardEntry>> fetchDefaultLeaderboard() async {
+    final response = await _get('/leaderboard');
+    final payload = _decodeList(response, endpoint: '/leaderboard');
+    return payload
+        .map((item) => LeaderboardEntry.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<BundleModel>> fetchBundles() async {
     final response = await _get('/bundles');
     final payload = _decodeList(response, endpoint: '/bundles');
@@ -521,6 +546,22 @@ class ApiClient {
     final response = await _get('/strategy-engine/state');
     return StrategyEngineStateModel.fromJson(
         _decodeMap(response, endpoint: '/strategy-engine/state'));
+  }
+
+  Future<StrategyBuildResultModel> createStrategy(String prompt) async {
+    final response = await _post('/strategy/create', {'prompt': prompt});
+    return StrategyBuildResultModel.fromJson(
+      _decodeMap(response, endpoint: '/strategy/create'),
+    );
+  }
+
+  Future<List<StrategyRecordModel>> fetchStrategyList() async {
+    final response = await _get('/strategy/list');
+    final payload = _decodeList(response, endpoint: '/strategy/list');
+    return payload
+        .map((item) =>
+            StrategyRecordModel.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<StrategyTemplateModel>> fetchStrategyTemplates() async {

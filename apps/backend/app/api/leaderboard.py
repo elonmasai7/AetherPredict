@@ -9,6 +9,11 @@ from app.schemas.leaderboard import LeaderboardEntry
 router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
 
+@router.get("", response_model=list[LeaderboardEntry])
+def default_leaderboard(db: Session = Depends(get_db)) -> list[LeaderboardEntry]:
+    return traders(db)
+
+
 @router.get("/traders", response_model=list[LeaderboardEntry])
 def traders(db: Session = Depends(get_db)) -> list[LeaderboardEntry]:
     rows = db.execute(

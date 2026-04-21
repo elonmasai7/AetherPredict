@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/models.dart';
 import '../../core/nba_models.dart';
 import '../../core/providers.dart';
 import '../../core/theme.dart';
+import '../strategy_engine/strategy_engine_models.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/market_chart.dart';
 
@@ -34,33 +36,40 @@ class NbaCommandCenterScreen extends ConsumerStatefulWidget {
 class _NbaCommandCenterScreenState
     extends ConsumerState<NbaCommandCenterScreen> {
   final _amountController = TextEditingController(text: '100');
-  final _strategyController = TextEditingController(
-    text: 'Predict Lakers vs Warriors using last 5 games and injuries',
+  final _agentPromptController = TextEditingController(
+    text: 'Analyze the highest-conviction NBA market and explain the edge.',
   );
-  final List<String> _localLogs = [];
+  final _strategyPromptController = TextEditingController(
+    text:
+        'Build an NBA prediction strategy using injuries, pace, and live movement.',
+  );
+  final List<String> _tickerMessages = [];
+  final List<String> _terminalLogs = [];
+  final Map<String, Future<List<NbaNewsItem>>> _newsRequests = {};
+  final Map<int, Future<AiPredictionModel>> _aiRequests = {};
 
   Timer? _refreshTimer;
   int? _selectedMarketId;
   String _selectedSide = 'YES';
   double _confidenceLevel = 70;
-  final bool _automationEnabled = false;
-  final String _riskLevel = 'balanced';
   bool _executing = false;
-  bool _loadingAi = false;
-  bool _loadingStrategy = false;
-  bool _drawerExpanded = true;
-  int _drawerTabIndex = 0;
-  AiPredictionModel? _aiSuggestion;
-  StrategyPreviewModel? _strategyPreview;
+  bool _loadingAiSuggestion = false;
+  bool _runningAgent = false;
+  bool _creatingStrategy = false;
+  AiPredictionModel? _lastAgentResult;
+  StrategyBuildResultModel? _lastStrategyResult;
 
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted) return;
       ref.invalidate(platformHomeProvider);
-      if (_selectedMarketId != null) {
-        ref.invalidate(liquidityBookProvider(_selectedMarketId!));
+      ref.invalidate(nbaGamesProvider);
+      final marketId = _selectedMarketId;
+      if (marketId != null) {
+        ref.invalidate(liquidityBookProvider(marketId));
+        _aiRequests.remove(marketId);
       }
     });
   }
@@ -69,173 +78,178 @@ class _NbaCommandCenterScreenState
   void dispose() {
     _refreshTimer?.cancel();
     _amountController.dispose();
-    _strategyController.dispose();
+    _agentPromptController.dispose();
+    _strategyPromptController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final homeValue = ref.watch(platformHomeProvider);
-    final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
+    final gamesValue = ref.watch(nbaGamesProvider);
+    final query = ref.watch(searchQueryProvider).trim().toLowerCase();
+
+    ref.listen<AsyncValue<LiveMarketUpdate>>(marketUpdatesProvider,
+        (previous, next) {
+      next.whenData((update) {
+        _pushTicker(
+          '${update.market} ${(update.yesProbability * 100).toStringAsFixed(1)}% AI ${(update.confidence * 100).toStringAsFixed(0)}%',
+        );
+        _pushLog(
+          'probability update ${update.market} ${(update.yesProbability * 100).toStringAsFixed(1)}%',
+        );
+      });
+    });
+
+    ref.listen<AsyncValue<TxUpdate>>(txUpdatesProvider, (previous, next) {
+      next.whenData((update) {
+        _pushTicker('TX ${update.status.toUpperCase()} MKT ${update.marketId}');
+        _pushLog('market execution ${update.marketId} ${update.status}');
+      });
+    });
+
+    ref.listen<AsyncValue<Map<String, dynamic>>>(nbaGameUpdatesProvider,
+        (previous, next) {
+      next.whenData((payload) {
+        final headline =
+            payload['headline']?.toString() ?? payload['status']?.toString();
+        if (headline != null && headline.isNotEmpty) {
+          _pushTicker(headline);
+        }
+      });
+    });
 
     return AppScaffold(
       title: _title(widget.section),
       subtitle: _subtitle(widget.section),
       headerBottom: homeValue.maybeWhen(
-        data: (home) => _TerminalTickerBar(items: _tickerItems(home)),
+        data: (home) => _TickerBar(items: _derivedTicker(home)),
         orElse: () => const SizedBox.shrink(),
       ),
       sidebarFooter: homeValue.maybeWhen(
-        data: (home) => _sidebarMetricsPanel(home),
+        data: (home) => _sidebarMetrics(home),
         orElse: () => const SizedBox.shrink(),
       ),
       child: homeValue.when(
         data: (home) {
-          final filteredGames =
-              _filterGames(home.liveGames, home.markets, searchQuery);
-          final selectedMarket = _selectedMarket(home, filteredGames);
+          if (widget.section == NbaSection.myPredictions) {
+            return _predictionsWorkspace();
+          }
+          if (widget.section == NbaSection.aiAgents) {
+            return _aiAgentsWorkspace();
+          }
+          if (widget.section == NbaSection.strategyLab) {
+            return _strategyLabWorkspace();
+          }
+          if (widget.section == NbaSection.news) {
+            return _newsWorkspace();
+          }
+          if (widget.section == NbaSection.leaderboard) {
+            return _leaderboardWorkspace();
+          }
+          final liveGames = gamesValue.maybeWhen(
+            data: (games) => games,
+            orElse: () => home.liveGames,
+          );
+          final filteredGames = _filterGames(liveGames, home.markets, query);
+          final selectedMarket =
+              _resolveSelectedMarket(home.markets, filteredGames);
           final selectedGame = _selectedGame(filteredGames, selectedMarket);
-          final newsFeed = _newsFeed(home, selectedMarket, selectedGame);
-          final terminalLogs = _buildTerminalLogs(home, selectedMarket);
+          final centerWidth = _centerWidth(context);
 
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 1400;
-              if (compact) {
-                return _compactLayout(
-                  home,
-                  filteredGames,
-                  selectedMarket,
-                  selectedGame,
-                  newsFeed,
-                  terminalLogs,
-                );
-              }
-
-              return Column(
-                children: [
-                  _topStatsStrip(home, selectedMarket, selectedGame),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 11,
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 292,
-                                      child: _liveGameBoard(
-                                        filteredGames,
-                                        home.markets,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: _probabilityTerminal(
-                                        home,
-                                        selectedMarket,
-                                        selectedGame,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 5,
-                                      child: _newsEventPanel(
-                                        newsFeed,
-                                        selectedMarket,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      flex: 4,
-                                      child: _executionPanel(
-                                        home,
-                                        selectedMarket,
-                                        selectedGame,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _intelligenceDrawer(home, selectedMarket),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _terminalLogBar(terminalLogs),
-                ],
-              );
-            },
+          return _marketWorkspace(
+            home,
+            filteredGames,
+            selectedMarket,
+            selectedGame,
+            centerWidth,
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _terminalPanel(
-          title: 'SYSTEM STATUS',
-          subtitle: 'Workspace unavailable',
-          child: Text(
-            'Unable to load platform data: $error',
-            style: const TextStyle(color: AetherColors.critical),
+        error: (error, _) => _panel(
+          title: 'SYSTEM',
+          subtitle: 'Backend connection',
+          child: Center(
+            child: Text(
+              '$error',
+              style:
+                  const TextStyle(fontSize: 12, color: AetherColors.critical),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _compactLayout(
+  Widget _marketWorkspace(
     PlatformHomeModel home,
-    List<NbaLiveGame> games,
-    NbaMarket market,
+    List<NbaLiveGame> filteredGames,
+    NbaMarket selectedMarket,
     NbaLiveGame? selectedGame,
-    List<_FeedEntry> newsFeed,
-    List<String> terminalLogs,
+    double centerWidth,
   ) {
-    return ListView(
+    return Stack(
       children: [
-        _topStatsStrip(home, market, selectedGame),
-        const SizedBox(height: 8),
-        SizedBox(height: 300, child: _liveGameBoard(games, home.markets)),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 360,
-          child: _probabilityTerminal(home, market, selectedGame),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 88),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: 280 + centerWidth + 360 + 16,
+              height: double.infinity,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 280,
+                    child: _watchlistPanel(filteredGames, home.markets),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: centerWidth,
+                    child: _mainTerminal(home, selectedMarket, selectedGame),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 360,
+                    child: _intelligenceStack(
+                      home,
+                      selectedMarket,
+                      selectedGame,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        SizedBox(height: 300, child: _newsEventPanel(newsFeed, market)),
-        const SizedBox(height: 8),
-        _executionPanel(home, market, selectedGame),
-        const SizedBox(height: 8),
-        _intelligenceDrawer(home, market, compact: true),
-        const SizedBox(height: 8),
-        _terminalLogBar(terminalLogs),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _executionBar(selectedMarket),
+        ),
       ],
     );
   }
 
-  Widget _sidebarMetricsPanel(PlatformHomeModel home) {
+  double _centerWidth(BuildContext context) {
+    final total = MediaQuery.of(context).size.width;
+    final available = total - 228 - 24 - 280 - 360 - 16;
+    if (available < 720) return 720;
+    return available;
+  }
+
+  Widget _sidebarMetrics(PlatformHomeModel home) {
     final aiSignals =
-        home.agents.where((agent) => agent.confidence >= 0.7).length;
-    final alertCount =
+        home.agents.where((item) => item.confidence >= 0.7).length;
+    final alerts =
         home.news.where((item) => item.urgency.toLowerCase() != 'low').length;
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: AetherColors.bgPanel,
         border: Border.all(color: AetherColors.accentSoft),
-        borderRadius: BorderRadius.circular(AetherRadii.sm),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -244,16 +258,16 @@ class _NbaCommandCenterScreenState
             'LIVE METRICS',
             style: TextStyle(
               fontSize: 10,
-              letterSpacing: 0.9,
-              color: AetherColors.accent,
               fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: AetherColors.accent,
             ),
           ),
           const SizedBox(height: 6),
           _sidebarMetricRow('Active Games', '${home.liveGames.length}'),
           _sidebarMetricRow('Open Markets', '${home.markets.length}'),
           _sidebarMetricRow('AI Signals', '$aiSignals'),
-          _sidebarMetricRow('News Alerts', '$alertCount'),
+          _sidebarMetricRow('News Alerts', '$alerts'),
         ],
       ),
     );
@@ -261,7 +275,7 @@ class _NbaCommandCenterScreenState
 
   Widget _sidebarMetricRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
           Expanded(
@@ -272,323 +286,688 @@ class _NbaCommandCenterScreenState
           ),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AetherColors.text,
-            ),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
           ),
         ],
       ),
     );
   }
 
-  Widget _topStatsStrip(
-    PlatformHomeModel home,
-    NbaMarket market,
-    NbaLiveGame? game,
-  ) {
-    final volatility = _marketVolatility(market);
-    final momentum = _marketMovement(market);
-    final liveCount =
-        home.liveGames.where((item) => item.status != 'Pre-game').length;
-
-    return SizedBox(
-      height: 64,
-      child: Row(
-        children: [
-          Expanded(
-            child: _metricBlock(
-                'TOTAL VOLUME',
-                _usd(home.markets.fold(
-                  0,
-                  (sum, item) => sum + item.volume,
-                ))),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _metricBlock(
-              'OPEN INTEREST',
-              '${home.overview.openPredictions}',
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _metricBlock(
-              'AVG SPREAD',
-              '${_avgSpread(home.markets).toStringAsFixed(1)} bps',
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _metricBlock(
-                'ACTIVE MARKETS', '${home.overview.activeMarkets}'),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _metricBlock(
-              'AI ACCURACY',
-              '${(home.overview.modelAccuracy * 100).toStringAsFixed(1)}%',
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _metricBlock(
-              'LIVE FLOW',
-              '$liveCount live • ${momentum >= 0 ? '+' : ''}${momentum.toStringAsFixed(1)}%',
-              valueColor:
-                  momentum >= 0 ? AetherColors.success : AetherColors.critical,
-              footer:
-                  'VOL ${volatility.toStringAsFixed(1)} • ${game?.status ?? market.category}',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _metricBlock(
-    String label,
-    String value, {
-    Color? valueColor,
-    String? footer,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: AetherColors.bgElevated,
-        border: Border.all(color: AetherColors.accentSoft),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 10,
-              color: AetherColors.accent,
-              letterSpacing: 0.8,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: valueColor ?? AetherColors.text,
-            ),
-          ),
-          if (footer != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              footer,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: AetherColors.muted),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _liveGameBoard(List<NbaLiveGame> games, List<NbaMarket> markets) {
-    return _terminalPanel(
-      title: 'LIVE GAMES',
-      subtitle: '${games.length} tracked matchups',
-      child: games.isEmpty
-          ? const Center(
-              child: Text(
-                'No live NBA games match the current search.',
-                style: TextStyle(fontSize: 12, color: AetherColors.muted),
-              ),
-            )
-          : ListView.separated(
-              itemCount: games.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 4),
-              itemBuilder: (context, index) {
-                final game = games[index];
-                final market = _marketForGame(game, markets);
-                final selected =
-                    market != null && market.id == _selectedMarketId;
-                final liveClock = _gameClock(game);
-                final probability =
-                    market?.yesProbability ?? game.winProbabilityHome;
-                final scoreGap = game.homeScore - game.awayScore;
-
-                return InkWell(
-                  onTap: market == null
-                      ? null
-                      : () {
-                          setState(() {
-                            _selectedMarketId = market.id;
-                            _selectedSide = 'YES';
-                          });
-                          _appendLocalLog('watchlist focus ${market.matchup}');
-                        },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AetherColors.bgPanel
-                          : AetherColors.bgElevated,
-                      border: Border.all(
-                        color: selected
-                            ? AetherColors.accent
-                            : AetherColors.border,
+  Widget _predictionsWorkspace() {
+    final positionsValue = ref.watch(portfolioProvider);
+    return _singlePanelLayout(
+      title: 'MY PREDICTIONS',
+      subtitle: 'Authenticated positions, PnL, and execution history',
+      child: positionsValue.when(
+        data: (positions) {
+          if (positions.isEmpty) {
+            return _emptyState('No prediction data available');
+          }
+          return ListView.separated(
+            itemCount: positions.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            itemBuilder: (context, index) {
+              final position = positions[index];
+              final positive = position.pnl >= 0;
+              return Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AetherColors.bg,
+                  border: Border.all(color: AetherColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            position.marketTitle,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${position.side} • size ${position.size.toStringAsFixed(2)} • avg ${position.avgPrice.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AetherColors.muted,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Column(
-                      children: [
-                        _gameTeamRow(
-                          label: game.teamA,
-                          score: game.homeScore,
-                          highlight: scoreGap >= 0,
+                    Text(
+                      _usd(position.pnl),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: positive
+                            ? AetherColors.success
+                            : AetherColors.critical,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _errorText(error),
+      ),
+    );
+  }
+
+  Widget _aiAgentsWorkspace() {
+    final agentsValue = ref.watch(agentListProvider);
+    return _singlePanelLayout(
+      title: 'AI AGENTS',
+      subtitle: 'Live agents, run-agent action, and backend responses',
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AetherColors.bg,
+              border: Border.all(color: AetherColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _agentPromptController,
+                  minLines: 2,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Agent prompt',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      child: FilledButton(
+                        onPressed: _runningAgent ? null : _runAgent,
+                        child: Text(_runningAgent ? 'RUNNING' : 'RUN AGENT'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (_lastAgentResult != null)
+                      Expanded(
+                        child: Text(
+                          _lastAgentResult!.reasoning.join(' '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AetherColors.muted,
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        _gameTeamRow(
-                          label: game.teamB,
-                          score: game.awayScore,
-                          highlight: scoreGap < 0,
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                liveClock,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: agentsValue.when(
+              data: (agents) {
+                if (agents.isEmpty) {
+                  return _emptyState('No agent data available');
+                }
+                return ListView.separated(
+                  itemCount: agents.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final agent = agents[index];
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AetherColors.bg,
+                        border: Border.all(color: AetherColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  agent.name,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${agent.status} • ${agent.strategy}',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: AetherColors.muted,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  agent.summary,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${(agent.confidence * 100).toStringAsFixed(0)}%',
                                 style: const TextStyle(
-                                  fontSize: 10,
-                                  color: AetherColors.muted,
+                                  fontSize: 11,
+                                  color: Color(0xFF43D4FF),
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ),
-                            Text(
-                              'Win ${(probability * 100).toStringAsFixed(0)}%',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: probability >= 0.5
-                                    ? AetherColors.success
-                                    : AetherColors.critical,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Spr ${(market?.spreadBps ?? 0).toStringAsFixed(1)}',
+                              const SizedBox(height: 2),
+                              Text(
+                                '${agent.roi.toStringAsFixed(1)}% ROI',
                                 style: const TextStyle(
                                   fontSize: 10,
                                   color: AetherColors.warning,
                                 ),
                               ),
-                            ),
-                            Text(
-                              'AI ${(((market?.aiConfidence ?? 0) * 100)).toStringAsFixed(0)}%',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF43D4FF),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => _errorText(error),
             ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _gameTeamRow({
-    required String label,
-    required int score,
-    required bool highlight,
-  }) {
-    return Row(
-      children: [
-        _teamLogo(label),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            _teamCode(label),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: highlight ? AetherColors.text : AetherColors.muted,
+  Widget _strategyLabWorkspace() {
+    final stateValue = ref.watch(strategyEngineStateProvider);
+    return _singlePanelLayout(
+      title: 'STRATEGY LAB',
+      subtitle: 'Create strategies, inspect records, and execute Canon actions',
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AetherColors.bg,
+              border: Border.all(color: AetherColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _strategyPromptController,
+                  minLines: 2,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Strategy prompt',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 160,
+                      child: FilledButton(
+                        onPressed: _creatingStrategy ? null : _createStrategy,
+                        child: Text(
+                            _creatingStrategy ? 'CREATING' : 'CREATE STRATEGY'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (_lastStrategyResult != null)
+                      Expanded(
+                        child: Text(
+                          _lastStrategyResult!.strategy.name,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: AetherColors.accent,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ),
           ),
-        ),
-        Text(
-          '$score',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: highlight ? AetherColors.text : AetherColors.muted,
+          const SizedBox(height: 8),
+          Expanded(
+            child: stateValue.when(
+              data: (state) {
+                if (state.strategies.isEmpty) {
+                  return _emptyState('No strategy data available');
+                }
+                return ListView.separated(
+                  itemCount: state.strategies.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final strategy = state.strategies[index];
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AetherColors.bg,
+                        border: Border.all(color: AetherColors.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  strategy.name,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              _badge(strategy.stage, AetherColors.accent),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            strategy.prompt,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${strategy.market} • ${(strategy.confidence * 100).toStringAsFixed(0)}% confidence',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AetherColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) => _errorText(error),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _newsWorkspace() {
+    final newsValue = FutureBuilder<List<NbaNewsItem>>(
+      future: ref.read(apiClientProvider).fetchNews(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          if (snapshot.hasError) return _errorText(snapshot.error!);
+          return const Center(child: CircularProgressIndicator());
+        }
+        final items = snapshot.data!;
+        if (items.isEmpty) {
+          return _emptyState('No news data available');
+        }
+        return ListView.separated(
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return InkWell(
+              onTap: () => _openNews(item),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AetherColors.bg,
+                  border: Border.all(color: AetherColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.summary,
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${item.source} • ${_timeAgo(item.publishedAt)}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AetherColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    return _singlePanelLayout(
+      title: 'NEWS',
+      subtitle: 'NBA news feed from backend integration',
+      child: newsValue,
+    );
+  }
+
+  Widget _leaderboardWorkspace() {
+    final leaderboardValue = ref.watch(traderLeaderboardProvider);
+    return _singlePanelLayout(
+      title: 'LEADERBOARD',
+      subtitle: 'Ranked users by PnL, ROI, and accuracy',
+      child: leaderboardValue.when(
+        data: (rows) {
+          if (rows.isEmpty) {
+            return _emptyState('No leaderboard data available');
+          }
+          return ListView.separated(
+            itemCount: rows.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            itemBuilder: (context, index) {
+              final row = rows[index];
+              return Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AetherColors.bg,
+                  border: Border.all(color: AetherColors.border),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 28,
+                      child: Text(
+                        '#${row.rank}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        row.name,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${row.lifetimeAccuracy.toStringAsFixed(1)}%',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF43D4FF),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      '${row.roi.toStringAsFixed(1)} ROI',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AetherColors.warning,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _errorText(error),
+      ),
+    );
+  }
+
+  Widget _singlePanelLayout({
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return _panel(
+      title: title,
+      subtitle: subtitle,
+      child: child,
+    );
+  }
+
+  Widget _emptyState(String text) {
+    return Center(
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 12, color: AetherColors.muted),
+      ),
+    );
+  }
+
+  Widget _errorText(Object error) {
+    return Center(
+      child: Text(
+        '$error',
+        style: const TextStyle(fontSize: 11, color: AetherColors.critical),
+      ),
+    );
+  }
+
+  Widget _watchlistPanel(List<NbaLiveGame> games, List<NbaMarket> markets) {
+    return _panel(
+      title: 'LIVE WATCHLIST',
+      subtitle: '${games.length} game markets',
+      child: ListView.separated(
+        itemCount: games.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 6),
+        itemBuilder: (context, index) {
+          final game = games[index];
+          final market = _marketForGame(game, markets);
+          if (market == null) {
+            return const SizedBox.shrink();
+          }
+          final selected = market.id == _selectedMarketId;
+          return InkWell(
+            onTap: () {
+              setState(() {
+                _selectedMarketId = market.id;
+                _selectedSide = 'YES';
+              });
+              _pushLog('watchlist load ${market.matchup}');
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color:
+                    selected ? AetherColors.bgPanel : AetherColors.bgElevated,
+                border: Border.all(
+                  color: selected ? AetherColors.accent : AetherColors.border,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_teamCode(game.teamA)} vs ${_teamCode(game.teamB)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _teamScoreCell(game.teamA, game.homeScore),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _teamScoreCell(game.teamB, game.awayScore),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _watchStat(
+                          'PROB',
+                          '${(market.yesProbability * 100).toStringAsFixed(0)}%',
+                          color: market.yesProbability >= 0.5
+                              ? AetherColors.success
+                              : AetherColors.critical,
+                        ),
+                      ),
+                      Expanded(
+                        child: _watchStat(
+                          'SPREAD',
+                          market.spreadBps.toStringAsFixed(1),
+                          color: AetherColors.warning,
+                        ),
+                      ),
+                      Expanded(
+                        child: _watchStat(
+                          'AI',
+                          '${(market.aiConfidence * 100).toStringAsFixed(0)}%',
+                          color: const Color(0xFF43D4FF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _gameClock(game),
+                    style: const TextStyle(
+                        fontSize: 10, color: AetherColors.muted),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _teamScoreCell(String team, int score) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      decoration: BoxDecoration(
+        color: AetherColors.bg,
+        border: Border.all(color: AetherColors.border),
+      ),
+      child: Row(
+        children: [
+          _teamLogo(team),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              _teamCode(team),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+          ),
+          Text(
+            '$score',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _watchStat(String label, String value, {required Color color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            color: AetherColors.accent,
+            letterSpacing: 0.7,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w700, color: color),
         ),
       ],
     );
   }
 
-  Widget _probabilityTerminal(
+  Widget _mainTerminal(
     PlatformHomeModel home,
     NbaMarket market,
     NbaLiveGame? game,
   ) {
+    final tape = _tradeTape(home, market);
     final movement = _marketMovement(market);
-    final volatility = _marketVolatility(market);
-    final markers = _signalMarkerIndexes(market);
-    final tape = _predictionTape(home, market);
-
-    return _terminalPanel(
-      title: 'PROBABILITY TERMINAL',
-      subtitle: '${market.matchup} • ${game?.status ?? market.category}',
-      headerTrailing: _terminalBadge(
-        market.confidenceLabel,
-        color: AetherColors.accent,
-      ),
+    return _panel(
+      title: 'MAIN TERMINAL',
+      subtitle: market.matchup,
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _microMetric(
-                  'SPREAD',
-                  '${market.spreadBps.toStringAsFixed(1)} bps',
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AetherColors.bg,
+              border: Border.all(color: AetherColors.border),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        market.matchup,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${game?.status ?? market.category} • VOL ${_usd(market.volume)} • LIQ ${_usd(market.liquidity)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AetherColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _microMetric('LIQ', _usd(market.liquidity)),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _microMetric(
-                  'CONF',
-                  '${(market.aiConfidence * 100).toStringAsFixed(0)}%',
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _microMetric(
-                  'VOL',
-                  volatility.toStringAsFixed(1),
-                  valueColor: volatility >= 4
-                      ? AetherColors.warning
-                      : AetherColors.text,
-                ),
-              ),
-            ],
+                _badge(market.confidenceLabel, AetherColors.accent),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -599,12 +978,13 @@ class _NbaCommandCenterScreenState
                 border: Border.all(color: AetherColors.border),
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Text(
-                        '${market.yesLabel} WIN PROBABILITY',
-                        style: const TextStyle(
+                      const Text(
+                        'WIN PROBABILITY',
+                        style: TextStyle(
                           fontSize: 10,
                           color: AetherColors.accent,
                           letterSpacing: 0.8,
@@ -629,11 +1009,11 @@ class _NbaCommandCenterScreenState
                       points: market.probabilityPoints,
                       lineColor: const Color(0xFF43D4FF),
                       bandColor: const Color(0xFF43D4FF),
-                      markerIndexes: markers,
+                      markerIndexes: _signalMarkerIndexes(market),
                       showGrid: true,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
@@ -648,7 +1028,7 @@ class _NbaCommandCenterScreenState
                         ),
                       ),
                       Text(
-                        'AI band ${(market.aiConfidence * 100).toStringAsFixed(0)}%',
+                        'AI ${(market.aiConfidence * 100).toStringAsFixed(0)}%',
                         style: const TextStyle(
                           fontSize: 10,
                           color: AetherColors.muted,
@@ -661,823 +1041,103 @@ class _NbaCommandCenterScreenState
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 72,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'LIVE PREDICTION TAPE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 0.8,
-                    color: AetherColors.accent,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: tape.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 4),
-                    itemBuilder: (context, index) {
-                      final entry = tape[index];
-                      return Container(
-                        width: 164,
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AetherColors.bg,
-                          border: Border.all(color: AetherColors.border),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              entry.user,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${entry.pick} • ${_usd(entry.amount)}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: AetherColors.muted,
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              entry.market,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: AetherColors.accent,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _newsEventPanel(List<_FeedEntry> feed, NbaMarket market) {
-    return _terminalPanel(
-      title: 'LIVE SPORTS NEWS',
-      subtitle: 'Breaking headlines, alerts, and event flow',
-      child: ListView.separated(
-        itemCount: feed.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 4),
-        itemBuilder: (context, index) {
-          final entry = feed[index];
-          return InkWell(
-            onTap: entry.newsItem != null
-                ? () {
-                    _appendLocalLog('news drilldown ${entry.title}');
-                    _openNews(entry.newsItem!);
-                  }
-                : null,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AetherColors.bgElevated,
-                border: Border.all(
-                  color: _feedColor(entry.type).withValues(alpha: 0.5),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 64,
-                    child: Text(
-                      '[${entry.label}]',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: _feedColor(entry.type),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          entry.title,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          entry.detail,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: AetherColors.muted,
-                            height: 1.25,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    entry.timeLabel,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AetherColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _executionPanel(
-    PlatformHomeModel home,
-    NbaMarket market,
-    NbaLiveGame? game,
-  ) {
-    final amount = double.tryParse(_amountController.text) ?? 0;
-    final price =
-        _selectedSide == 'YES' ? market.yesProbability : market.noProbability;
-    final expectedPayout = amount <= 0 || price <= 0 ? 0.0 : amount / price;
-    final liquidityBook = ref.watch(liquidityBookProvider(market.id));
-
-    return _terminalPanel(
-      title: 'MARKET EXECUTION',
-      subtitle: '${market.yesLabel} vs ${market.noLabel}',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
           Row(
             children: [
               Expanded(
-                child: _actionTile(
-                  label: market.yesLabel,
-                  selected: _selectedSide == 'YES',
-                  value: '${(market.yesProbability * 100).toStringAsFixed(0)}%',
-                  positive: true,
-                  onTap: () => setState(() => _selectedSide = 'YES'),
-                ),
+                child: _terminalMetric(
+                    'SPREAD', market.spreadBps.toStringAsFixed(1)),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: _actionTile(
-                  label: market.noLabel,
-                  selected: _selectedSide == 'NO',
-                  value: '${(market.noProbability * 100).toStringAsFixed(0)}%',
-                  positive: false,
-                  onTap: () => setState(() => _selectedSide = 'NO'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _amountController,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount',
-                    prefixText: '\$',
-                    isDense: true,
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
+                  child: _terminalMetric('LIQUIDITY', _usd(market.liquidity))),
+              const SizedBox(width: 6),
+              Expanded(child: _terminalMetric('VOLUME', _usd(market.volume))),
               const SizedBox(width: 6),
               Expanded(
-                child: Container(
-                  height: 46,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: AetherColors.bg,
-                    border: Border.all(color: AetherColors.border),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'CONFIDENCE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: AetherColors.accent,
-                        ),
-                      ),
-                      Text(
-                        '${_confidenceLevel.toStringAsFixed(0)}%',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 2,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-            ),
-            child: Slider(
-              value: _confidenceLevel,
-              min: 50,
-              max: 95,
-              activeColor: const Color(0xFF43D4FF),
-              inactiveColor: AetherColors.border,
-              onChanged: (value) => setState(() => _confidenceLevel = value),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                  child: _microMetric(
-                      'PROB', '${(price * 100).toStringAsFixed(1)}%')),
-              const SizedBox(width: 4),
-              Expanded(child: _microMetric('PAYOUT', _usd(expectedPayout))),
-              const SizedBox(width: 4),
-              Expanded(
-                child: liquidityBook.maybeWhen(
-                  data: (book) => _microMetric(
-                    'SLIP',
-                    '${book.spread.toStringAsFixed(2)}%',
-                    valueColor: book.spread >= 0.05
-                        ? AetherColors.warning
-                        : AetherColors.text,
-                  ),
-                  orElse: () => _microMetric('SLIP', '--'),
+                child: _terminalMetric(
+                  'VOLATILITY',
+                  _marketVolatility(market).toStringAsFixed(1),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: liquidityBook.when(
-              data: (book) => Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AetherColors.bg,
-                  border: Border.all(color: AetherColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'EXECUTION DEPTH',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: AetherColors.accent,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          _bookHeader(),
-                          const SizedBox(height: 2),
-                          ..._bookRows(book, market),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AetherColors.bg,
+                border: Border.all(color: AetherColors.border),
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Text(
-                '$error',
-                style:
-                    const TextStyle(fontSize: 11, color: AetherColors.critical),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'LIVE TRADE FEED',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AetherColors.accent,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: tape.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 4),
+                      itemBuilder: (context, index) {
+                        final item = tape[index];
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AetherColors.bgElevated,
+                            border: Border.all(color: AetherColors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${item.user} ${item.pick}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _usd(item.amount),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AetherColors.warning,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _timeStamp(item.createdAt),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: AetherColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  onPressed: _executing ? null : () => _predictNow(market),
-                  child: Text(_executing ? 'EXECUTING' : 'PREDICT NOW'),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _loadingAi ? null : () => _useAiSuggestion(market),
-                  child: Text(_loadingAi ? 'LOADING AI' : 'AI SUGGESTION'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _loadingStrategy ? null : _runStrategyPreview,
-                  child: Text(_loadingStrategy ? 'RUNNING' : 'AUTO STRATEGY'),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: AetherColors.bg,
-                    border: Border.all(color: AetherColors.border),
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _strategyPreview?.summary ??
-                          _aiSuggestion?.reasoning.join(' ') ??
-                          (game?.headline ?? market.aiInsight),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AetherColors.muted,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _bookHeader() {
-    return const Row(
-      children: [
-        Expanded(
-          child: Text(
-            'YES BID',
-            style: TextStyle(fontSize: 11, color: AetherColors.accent),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            'NO ASK',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11, color: AetherColors.warning),
-          ),
-        ),
-        SizedBox(
-          width: 70,
-          child: Text(
-            'HEAT',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 11, color: AetherColors.muted),
-          ),
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _bookRows(LiquidityBookModel book, NbaMarket market) {
-    final length = book.bids.length < book.asks.length
-        ? book.bids.length
-        : book.asks.length;
-    final rows = <Widget>[];
-    for (var i = 0; i < length; i++) {
-      final bid = book.bids[i];
-      final ask = book.asks[i];
-      final yesPrice =
-          (bid['yes_price'] as num?)?.toDouble() ?? market.yesProbability;
-      final noPrice =
-          (ask['no_price'] as num?)?.toDouble() ?? market.noProbability;
-      final imbalance = ((yesPrice - noPrice).abs() * 100).clamp(4, 100);
-      rows.add(
-        InkWell(
-          onTap: () {
-            setState(() {
-              _selectedSide = yesPrice >= noPrice ? 'YES' : 'NO';
-              _amountController.text =
-                  (((bid['size'] as num?)?.toDouble() ?? 100) / 4)
-                      .toStringAsFixed(0);
-            });
-            _appendLocalLog(
-              'depth focus ${_selectedSide == 'YES' ? market.yesLabel : market.noLabel}',
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${(yesPrice * 100).toStringAsFixed(1)}% x ${(bid['size'] ?? '--')}',
-                    style: const TextStyle(fontSize: 10),
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    '${(noPrice * 100).toStringAsFixed(1)}% x ${(ask['size'] ?? '--')}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 10),
-                  ),
-                ),
-                SizedBox(
-                  width: 70,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      width: imbalance.toDouble(),
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: yesPrice >= noPrice
-                            ? AetherColors.success
-                            : AetherColors.critical,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return rows;
-  }
-
-  Widget _actionTile({
-    required String label,
-    required String value,
-    required bool selected,
-    required bool positive,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: selected ? AetherColors.bgPanel : AetherColors.bgElevated,
-          border: Border.all(
-            color: selected
-                ? (positive ? AetherColors.success : AetherColors.critical)
-                : AetherColors.border,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: positive ? AetherColors.success : AetherColors.critical,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _intelligenceDrawer(
-    PlatformHomeModel home,
-    NbaMarket market, {
-    bool compact = false,
-  }) {
-    final width = compact ? double.infinity : (_drawerExpanded ? 288.0 : 40.0);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      width: width,
-      decoration: BoxDecoration(
-        color: AetherColors.bgElevated,
-        border: Border.all(color: AetherColors.accentSoft),
-      ),
-      child: compact || _drawerExpanded
-          ? Column(
-              children: [
-                Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  decoration: const BoxDecoration(
-                    border:
-                        Border(bottom: BorderSide(color: AetherColors.border)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'INTELLIGENCE',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AetherColors.accent,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (!compact)
-                        IconButton(
-                          onPressed: () {
-                            setState(() => _drawerExpanded = false);
-                          },
-                          icon: const Icon(Icons.chevron_right, size: 16),
-                        ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  height: 32,
-                  child: Row(
-                    children: List.generate(_drawerTabs.length, (index) {
-                      final selected = _drawerTabIndex == index;
-                      return Expanded(
-                        child: InkWell(
-                          onTap: () => setState(() => _drawerTabIndex = index),
-                          child: Container(
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? AetherColors.bgPanel
-                                  : AetherColors.bgElevated,
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: selected
-                                      ? AetherColors.accent
-                                      : AetherColors.border,
-                                  width: 1.2,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              _drawerTabs[index],
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: selected
-                                    ? AetherColors.text
-                                    : AetherColors.muted,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: _drawerContent(home, market),
-                  ),
-                ),
-              ],
-            )
-          : Center(
-              child: IconButton(
-                onPressed: () => setState(() => _drawerExpanded = true),
-                icon: const Icon(Icons.chevron_left, size: 18),
-              ),
-            ),
-    );
-  }
-
-  Widget _drawerContent(PlatformHomeModel home, NbaMarket market) {
-    switch (_drawerTabIndex) {
-      case 0:
-        return _aiSignalsPanel(home, market);
-      case 1:
-        return _playerStatsPanel(market);
-      case 2:
-        return _teamTrendsPanel(market);
-      case 3:
-        return _injuryAlertsPanel(home, market);
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _aiSignalsPanel(PlatformHomeModel home, NbaMarket market) {
-    final items = <Widget>[
-      _drawerTile(
-        title: 'Model Confidence Shift',
-        value: '${(_marketMovement(market)).toStringAsFixed(1)} pts',
-        detail: market.aiInsight,
-        color: _marketMovement(market) >= 0
-            ? AetherColors.success
-            : AetherColors.critical,
-      ),
-      ...home.agents.take(4).map(
-            (agent) => _drawerTile(
-              title: agent.name,
-              value: '${(agent.confidence * 100).toStringAsFixed(0)}%',
-              detail: agent.recommendation,
-              color: agent.confidence >= 0.7
-                  ? const Color(0xFF43D4FF)
-                  : AetherColors.warning,
-              onTap: () {
-                _appendLocalLog('ai signal ${agent.name}');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(agent.summary)),
-                );
-              },
-            ),
-          ),
-    ];
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 4),
-      itemBuilder: (_, index) => items[index],
-    );
-  }
-
-  Widget _playerStatsPanel(NbaMarket market) {
-    final entries = market.playerContext.entries.toList(growable: false);
-    if (entries.isEmpty) {
-      return Center(
-        child: Text(
-          market.aiInsight,
-          style: const TextStyle(fontSize: 11, color: AetherColors.muted),
-        ),
-      );
-    }
-    return ListView.separated(
-      itemCount: entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 4),
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        return _drawerTile(
-          title: _labelize(entry.key),
-          value: '${entry.value}',
-          detail: 'Player context linked to ${market.matchup}',
-          color: const Color(0xFF43D4FF),
-        );
-      },
-    );
-  }
-
-  Widget _teamTrendsPanel(NbaMarket market) {
-    final entries = market.teamForm.entries.toList(growable: false);
-    return ListView.separated(
-      itemCount: entries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 4),
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        final positive = entry.value is num && (entry.value as num) >= 0;
-        return _drawerTile(
-          title: _labelize(entry.key),
-          value: '${entry.value}',
-          detail: 'Team trend monitor',
-          color: positive ? AetherColors.success : AetherColors.warning,
-        );
-      },
-    );
-  }
-
-  Widget _injuryAlertsPanel(PlatformHomeModel home, NbaMarket market) {
-    final items = home.news
-        .where(
-          (item) =>
-              item.team == null ||
-              market.matchup.toLowerCase().contains(item.team!.toLowerCase()),
-        )
-        .take(6)
-        .toList(growable: false);
-
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 4),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return _drawerTile(
-          title: item.title,
-          value: item.urgency.toUpperCase(),
-          detail: item.summary,
-          color: item.urgency.toLowerCase() == 'high'
-              ? AetherColors.warning
-              : AetherColors.text,
-          onTap: () => _openNews(item),
-        );
-      },
-    );
-  }
-
-  Widget _drawerTile({
-    required String title,
-    required String value,
-    required String detail,
-    required Color color,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: AetherColors.bg,
-          border: Border.all(color: color.withValues(alpha: 0.65)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              detail,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 10,
-                color: AetherColors.muted,
-                height: 1.25,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _terminalLogBar(List<String> logs) {
-    return Container(
-      height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: AetherColors.bgElevated,
-        border: Border.all(color: AetherColors.accentSoft),
-      ),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: logs.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) => Center(
-          child: Text(
-            logs[index],
-            style: const TextStyle(
-              fontSize: 10,
-              color: AetherColors.muted,
-              fontFamily: 'monospace',
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _microMetric(String label, String value, {Color? valueColor}) {
+  Widget _terminalMetric(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       decoration: BoxDecoration(
@@ -1498,10 +1158,430 @@ class _NbaCommandCenterScreenState
           const SizedBox(height: 2),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: valueColor ?? AetherColors.text,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _intelligenceStack(
+    PlatformHomeModel home,
+    NbaMarket market,
+    NbaLiveGame? game,
+  ) {
+    return Column(
+      children: [
+        Expanded(
+          flex: 4,
+          child: _marketDepthPanel(market),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          flex: 3,
+          child: _newsPanel(game),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          flex: 3,
+          child: _aiSignalPanel(market),
+        ),
+      ],
+    );
+  }
+
+  Widget _marketDepthPanel(NbaMarket market) {
+    final liquidityValue = ref.watch(liquidityBookProvider(market.id));
+    return _panel(
+      title: 'MARKET DEPTH',
+      subtitle: 'Bid ladder / ask ladder',
+      child: liquidityValue.when(
+        data: (book) => Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child:
+                      _terminalMetric('SPREAD', book.spread.toStringAsFixed(2)),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _terminalMetric(
+                      'SLIPPAGE', book.slippage.toStringAsFixed(2)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _depthHeader(),
+            const SizedBox(height: 4),
+            Expanded(
+              child: ListView(
+                children: _depthRows(book, market),
+              ),
+            ),
+          ],
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Text(
+          '$error',
+          style: const TextStyle(fontSize: 11, color: AetherColors.critical),
+        ),
+      ),
+    );
+  }
+
+  Widget _depthHeader() {
+    return const Row(
+      children: [
+        Expanded(
+          child: Text(
+            'YES BID',
+            style: TextStyle(fontSize: 10, color: AetherColors.accent),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            'NO ASK',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 10, color: AetherColors.warning),
+          ),
+        ),
+        SizedBox(
+          width: 60,
+          child: Text(
+            'HEAT',
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 10, color: AetherColors.muted),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _depthRows(LiquidityBookModel book, NbaMarket market) {
+    final length = book.bids.length < book.asks.length
+        ? book.bids.length
+        : book.asks.length;
+    final rows = <Widget>[];
+    for (var i = 0; i < length; i++) {
+      final bid = book.bids[i];
+      final ask = book.asks[i];
+      final yesPrice =
+          (bid['yes_price'] as num?)?.toDouble() ?? market.yesProbability;
+      final noPrice =
+          (ask['no_price'] as num?)?.toDouble() ?? market.noProbability;
+      final heat = ((yesPrice - noPrice).abs() * 100).clamp(6, 60).toDouble();
+      rows.add(
+        InkWell(
+          onTap: () {
+            setState(() {
+              _selectedSide = yesPrice >= noPrice ? 'YES' : 'NO';
+              _amountController.text =
+                  (((bid['size'] as num?)?.toDouble() ?? 100) / 3)
+                      .toStringAsFixed(0);
+            });
+            _pushLog('depth focus ${market.matchup} $_selectedSide');
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${(yesPrice * 100).toStringAsFixed(1)} x ${bid['size'] ?? '--'}',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    '${(noPrice * 100).toStringAsFixed(1)} x ${ask['size'] ?? '--'}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ),
+                SizedBox(
+                  width: 60,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      width: heat,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: yesPrice >= noPrice
+                            ? AetherColors.success
+                            : AetherColors.critical,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return rows;
+  }
+
+  Widget _newsPanel(NbaLiveGame? game) {
+    final teamKey = game?.homeTeam ?? game?.teamA ?? 'NBA';
+    return _panel(
+      title: 'LIVE NEWS',
+      subtitle: teamKey,
+      child: FutureBuilder<List<NbaNewsItem>>(
+        future: _teamNewsFuture(teamKey),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final items = snapshot.data!;
+          return ListView.separated(
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 4),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return InkWell(
+                onTap: () async {
+                  _pushLog('news open ${item.title}');
+                  await _openNews(item);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AetherColors.bg,
+                    border: Border.all(
+                      color: item.urgency.toLowerCase() == 'high'
+                          ? AetherColors.warning.withValues(alpha: 0.6)
+                          : AetherColors.border,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          _badge(
+                            item.urgency.toUpperCase(),
+                            item.urgency.toLowerCase() == 'high'
+                                ? AetherColors.warning
+                                : const Color(0xFF43D4FF),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AetherColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${item.source} • ${_timeAgo(item.publishedAt)}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AetherColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _aiSignalPanel(NbaMarket market) {
+    return _panel(
+      title: 'AI SIGNALS',
+      subtitle: 'Analyze game',
+      child: FutureBuilder<AiPredictionModel>(
+        future: _aiFuture(market.id),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final ai = snapshot.data!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _terminalMetric(
+                      'SHIFT',
+                      _marketMovement(market).toStringAsFixed(1),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _terminalMetric(
+                      'VOL ALERT',
+                      _marketVolatility(market).toStringAsFixed(1),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: ai.reasoning.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  itemBuilder: (context, index) {
+                    final reasoning = ai.reasoning[index];
+                    return InkWell(
+                      onTap: () {
+                        _pushLog('ai reasoning ${market.matchup}');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(reasoning)),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AetherColors.bg,
+                          border: Border.all(
+                            color:
+                                const Color(0xFF43D4FF).withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          reasoning,
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  _badge(ai.predictedSide, const Color(0xFF43D4FF)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Confidence ${(ai.confidence * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(
+                        fontSize: 10, color: AetherColors.muted),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _executionBar(NbaMarket market) {
+    final amount = double.tryParse(_amountController.text) ?? 0;
+    final price =
+        _selectedSide == 'YES' ? market.yesProbability : market.noProbability;
+    final payout = amount <= 0 || price <= 0 ? 0.0 : amount / price;
+
+    return Container(
+      height: 80,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AetherColors.bgElevated,
+        border: Border.all(color: AetherColors.accentSoft),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 160,
+            child: _executionSideButton(
+              label: market.yesLabel,
+              value: '${(market.yesProbability * 100).toStringAsFixed(0)}%',
+              selected: _selectedSide == 'YES',
+              positive: true,
+              onTap: () => setState(() => _selectedSide = 'YES'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 160,
+            child: _executionSideButton(
+              label: market.noLabel,
+              value: '${(market.noProbability * 100).toStringAsFixed(0)}%',
+              selected: _selectedSide == 'NO',
+              positive: false,
+              onTap: () => setState(() => _selectedSide = 'NO'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 130,
+            child: TextField(
+              controller: _amountController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(
+                isDense: true,
+                labelText: 'Amount',
+                prefixText: '\$',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 110,
+            child: _terminalMetric(
+                'CONF', '${_confidenceLevel.toStringAsFixed(0)}%'),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(width: 130, child: _terminalMetric('PAYOUT', _usd(payout))),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 2,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              ),
+              child: Slider(
+                value: _confidenceLevel,
+                min: 50,
+                max: 95,
+                activeColor: const Color(0xFF43D4FF),
+                inactiveColor: AetherColors.border,
+                onChanged: (value) => setState(() => _confidenceLevel = value),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 120,
+            child: FilledButton(
+              onPressed: _executing ? null : () => _predictNow(market),
+              child: Text(_executing ? 'EXECUTING' : 'PREDICT NOW'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 110,
+            child: OutlinedButton(
+              onPressed:
+                  _loadingAiSuggestion ? null : () => _useAiSuggestion(market),
+              child: Text(_loadingAiSuggestion ? 'LOADING' : 'AI SUGGEST'),
             ),
           ),
         ],
@@ -1509,11 +1589,54 @@ class _NbaCommandCenterScreenState
     );
   }
 
-  Widget _terminalPanel({
+  Widget _executionSideButton({
+    required String label,
+    required String value,
+    required bool selected,
+    required bool positive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: selected ? AetherColors.bgPanel : AetherColors.bg,
+          border: Border.all(
+            color: selected
+                ? (positive ? AetherColors.success : AetherColors.critical)
+                : AetherColors.border,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: positive ? AetherColors.success : AetherColors.critical,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _panel({
     required String title,
     required String subtitle,
     required Widget child,
-    Widget? headerTrailing,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -1524,35 +1647,19 @@ class _NbaCommandCenterScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AetherColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (headerTrailing != null) headerTrailing,
-            ],
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10, color: AetherColors.muted),
           ),
           const SizedBox(height: 8),
           Expanded(child: child),
@@ -1561,7 +1668,7 @@ class _NbaCommandCenterScreenState
     );
   }
 
-  Widget _terminalBadge(String text, {required Color color}) {
+  Widget _badge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
@@ -1569,11 +1676,11 @@ class _NbaCommandCenterScreenState
         border: Border.all(color: color.withValues(alpha: 0.7)),
       ),
       child: Text(
-        text.toUpperCase(),
+        label.toUpperCase(),
         style: TextStyle(
           fontSize: 9,
-          fontWeight: FontWeight.w700,
           color: color,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.7,
         ),
       ),
@@ -1596,14 +1703,13 @@ class _NbaCommandCenterScreenState
             walletAddress: wallet.address ?? 'demo-wallet',
           );
       ref.invalidate(platformHomeProvider);
-      ref.invalidate(portfolioProvider);
+      ref.invalidate(nbaGamesProvider);
       ref.invalidate(liquidityBookProvider(market.id));
-      _appendLocalLog(
-        'market executed ${market.matchup} $_selectedSide ${_usd(amount)}',
-      );
+      _pushLog(
+          'prediction sent ${market.matchup} $_selectedSide ${_usd(amount)}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Prediction executed for ${market.title}')),
+          SnackBar(content: Text('Prediction executed for ${market.matchup}')),
         );
       }
     } finally {
@@ -1614,50 +1720,66 @@ class _NbaCommandCenterScreenState
   }
 
   Future<void> _useAiSuggestion(NbaMarket market) async {
-    setState(() => _loadingAi = true);
+    setState(() => _loadingAiSuggestion = true);
     try {
-      final ai = await ref
+      final suggestion = await ref
           .read(apiClientProvider)
           .generatePrediction(marketId: market.id, amount: 100);
       if (!mounted) return;
       setState(() {
-        _aiSuggestion = ai;
-        _selectedSide = ai.predictedSide;
-        _confidenceLevel = ai.confidence * 100;
-        _amountController.text = ai.suggestedAmount.toStringAsFixed(0);
-        _drawerTabIndex = 0;
-        _drawerExpanded = true;
+        _selectedSide = suggestion.predictedSide;
+        _confidenceLevel = suggestion.confidence * 100;
+        _amountController.text = suggestion.suggestedAmount.toStringAsFixed(0);
       });
-      _appendLocalLog('ai signal triggered ${market.matchup}');
+      _pushLog('ai suggestion ${market.matchup} ${suggestion.predictedSide}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(suggestion.reasoning.join(' '))),
+      );
     } finally {
       if (mounted) {
-        setState(() => _loadingAi = false);
+        setState(() => _loadingAiSuggestion = false);
       }
     }
   }
 
-  Future<void> _runStrategyPreview() async {
-    setState(() => _loadingStrategy = true);
+  Future<void> _runAgent() async {
+    setState(() => _runningAgent = true);
     try {
-      final preview = await ref.read(apiClientProvider).previewStrategy(
-            prompt: _strategyController.text,
+      final result = await ref.read(apiClientProvider).runCustomAgent(
+            prompt: _agentPromptController.text,
+            riskLevel: 'balanced',
             dataSources: const ['stats', 'news', 'history'],
-            riskLevel: _riskLevel,
-            automationEnabled: _automationEnabled,
+            automationEnabled: false,
           );
       if (!mounted) return;
-      setState(() {
-        _strategyPreview = preview;
-        _drawerExpanded = true;
-        _drawerTabIndex = 0;
-      });
-      _appendLocalLog('auto strategy refreshed');
+      setState(() => _lastAgentResult = result);
+      _pushLog('agent run ${result.predictedSide}');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(preview.summary)),
+        SnackBar(content: Text(result.reasoning.join(' '))),
       );
     } finally {
       if (mounted) {
-        setState(() => _loadingStrategy = false);
+        setState(() => _runningAgent = false);
+      }
+    }
+  }
+
+  Future<void> _createStrategy() async {
+    setState(() => _creatingStrategy = true);
+    try {
+      final result = await ref
+          .read(apiClientProvider)
+          .buildStrategyFromPrompt(_strategyPromptController.text);
+      ref.invalidate(strategyEngineStateProvider);
+      if (!mounted) return;
+      setState(() => _lastStrategyResult = result);
+      _pushLog('strategy created ${result.strategy.name}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.strategy.name)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _creatingStrategy = false);
       }
     }
   }
@@ -1667,16 +1789,52 @@ class _NbaCommandCenterScreenState
     await launchUrl(Uri.parse(item.url), mode: LaunchMode.externalApplication);
   }
 
-  void _appendLocalLog(String message) {
+  Future<List<NbaNewsItem>> _teamNewsFuture(String team) {
+    return _newsRequests.putIfAbsent(
+      team,
+      () => ref.read(apiClientProvider).fetchNews(team: team),
+    );
+  }
+
+  Future<AiPredictionModel> _aiFuture(int marketId) {
+    return _aiRequests.putIfAbsent(
+      marketId,
+      () => ref.read(apiClientProvider).analyzeGame(marketId: marketId),
+    );
+  }
+
+  void _pushTicker(String message) {
+    if (!mounted) return;
+    setState(() {
+      _tickerMessages.insert(0, message);
+      if (_tickerMessages.length > 16) {
+        _tickerMessages.removeLast();
+      }
+    });
+  }
+
+  void _pushLog(String message) {
+    if (!mounted) return;
     final now = DateTime.now().toUtc();
     final stamp =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     setState(() {
-      _localLogs.insert(0, '[$stamp] $message');
-      if (_localLogs.length > 8) {
-        _localLogs.removeLast();
+      _terminalLogs.insert(0, '[$stamp] $message');
+      if (_terminalLogs.length > 10) {
+        _terminalLogs.removeLast();
       }
     });
+  }
+
+  List<String> _derivedTicker(PlatformHomeModel home) {
+    final seed = <String>[
+      for (final item in home.activityFeed.take(4))
+        '${item.user} ${item.pick} ${_usd(item.amount)}',
+      for (final item in home.markets.take(4))
+        '${item.yesLabel} ${_marketMovement(item) >= 0 ? '+' : ''}${_marketMovement(item).toStringAsFixed(1)}%',
+      ..._tickerMessages,
+    ];
+    return seed.isEmpty ? ['market stream online'] : seed.take(20).toList();
   }
 
   List<NbaLiveGame> _filterGames(
@@ -1684,7 +1842,7 @@ class _NbaCommandCenterScreenState
     List<NbaMarket> markets,
     String query,
   ) {
-    List<NbaLiveGame> result = games;
+    var result = games;
     if (query.isNotEmpty) {
       result = games
           .where(
@@ -1692,13 +1850,9 @@ class _NbaCommandCenterScreenState
                 game.matchup.toLowerCase().contains(query) ||
                 game.teamA.toLowerCase().contains(query) ||
                 game.teamB.toLowerCase().contains(query) ||
-                markets.any(
-                  (market) =>
-                      market.title.toLowerCase().contains(query) &&
-                      market.matchup
-                          .toLowerCase()
-                          .contains(game.matchup.toLowerCase().split(' ')[0]),
-                ),
+                markets.any((market) =>
+                    market.matchup.toLowerCase().contains(query) ||
+                    market.title.toLowerCase().contains(query)),
           )
           .toList();
     }
@@ -1710,25 +1864,26 @@ class _NbaCommandCenterScreenState
     return result;
   }
 
-  NbaMarket _selectedMarket(PlatformHomeModel home, List<NbaLiveGame> games) {
-    if (home.markets.isEmpty) {
+  NbaMarket _resolveSelectedMarket(
+      List<NbaMarket> markets, List<NbaLiveGame> games) {
+    if (markets.isEmpty) {
       throw StateError('No markets available.');
     }
     if (_selectedMarketId != null) {
-      return home.markets.firstWhere(
+      return markets.firstWhere(
         (market) => market.id == _selectedMarketId,
-        orElse: () => home.markets.first,
+        orElse: () => markets.first,
       );
     }
     for (final game in games) {
-      final match = _marketForGame(game, home.markets);
-      if (match != null) {
-        _selectedMarketId = match.id;
-        return match;
+      final market = _marketForGame(game, markets);
+      if (market != null) {
+        _selectedMarketId = market.id;
+        return market;
       }
     }
-    _selectedMarketId = home.markets.first.id;
-    return home.markets.first;
+    _selectedMarketId = markets.first.id;
+    return markets.first;
   }
 
   NbaLiveGame? _selectedGame(List<NbaLiveGame> games, NbaMarket market) {
@@ -1756,116 +1911,20 @@ class _NbaCommandCenterScreenState
         matchup.contains(game.teamB.toLowerCase().split(' ').last);
   }
 
-  List<String> _tickerItems(PlatformHomeModel home) {
-    final items = <String>[];
-    for (final market in home.markets.take(6)) {
-      final move = _marketMovement(market);
-      items.add(
-        '${market.yesLabel} ${move >= 0 ? '+' : ''}${move.toStringAsFixed(1)}%',
-      );
-    }
-    for (final item in home.news.take(4)) {
-      items.add('${item.source}: ${item.title}');
-    }
-    return items.isEmpty ? ['No live flow available'] : items;
-  }
-
-  List<_FeedEntry> _newsFeed(
-    PlatformHomeModel home,
-    NbaMarket market,
-    NbaLiveGame? game,
-  ) {
-    final items = <_FeedEntry>[];
-    for (final item in market.latestNews) {
-      items.add(
-        _FeedEntry(
-          type: item.urgency.toLowerCase() == 'high'
-              ? _FeedType.alert
-              : _FeedType.news,
-          label: item.urgency.toLowerCase() == 'high' ? 'ALERT' : 'NEWS',
-          title: item.title,
-          detail: item.summary,
-          timeLabel: _timeAgo(item.publishedAt),
-          newsItem: item,
-        ),
-      );
-    }
-    if (_marketMovement(market).abs() >= 2) {
-      items.add(
-        _FeedEntry(
-          type: _FeedType.signal,
-          label: 'SIGNAL',
-          title:
-              '${market.yesLabel} probability ${_marketMovement(market) >= 0 ? 'up' : 'down'} ${_marketMovement(market).abs().toStringAsFixed(1)} pts',
-          detail: market.aiInsight,
-          timeLabel: game == null ? market.category : game.status,
-        ),
-      );
-    }
-    for (final activity in home.activityFeed.take(4)) {
-      items.add(
-        _FeedEntry(
-          type: _FeedType.signal,
-          label: 'FLOW',
-          title: '${activity.user} predicted ${activity.pick}',
-          detail: '${activity.market} • ${_usd(activity.amount)}',
-          timeLabel: 'live',
-        ),
-      );
-    }
-    if (items.isEmpty) {
-      for (final item in home.news.take(6)) {
-        items.add(
-          _FeedEntry(
-            type: _FeedType.news,
-            label: 'NEWS',
-            title: item.title,
-            detail: item.summary,
-            timeLabel: _timeAgo(item.publishedAt),
-            newsItem: item,
-          ),
-        );
-      }
-    }
-    return items.take(10).toList(growable: false);
-  }
-
-  List<NbaPredictionActivity> _predictionTape(
-    PlatformHomeModel home,
-    NbaMarket market,
-  ) {
-    final tape = home.recentPredictions
-        .where((item) =>
-            item.market == market.matchup || item.market == market.title)
-        .toList();
-    if (tape.isNotEmpty) {
-      return tape.take(6).toList(growable: false);
-    }
-    return home.activityFeed.take(6).toList(growable: false);
-  }
-
-  List<String> _buildTerminalLogs(PlatformHomeModel home, NbaMarket market) {
-    final logs = <String>[
-      ..._localLogs,
-      '[${_timeStamp(home.generatedAt)}] probability update ${(market.yesProbability * 100).toStringAsFixed(1)}%',
-    ];
-    if (home.news.isNotEmpty) {
-      logs.add(
-        '[${_timeStamp(home.news.first.publishedAt)}] news alert ingested ${home.news.first.title}',
-      );
-    }
-    if (home.agents.isNotEmpty) {
-      logs.add(
-        '[${_timeStamp(home.generatedAt)}] ai signal ${home.agents.first.name} ${(home.agents.first.confidence * 100).toStringAsFixed(0)}%',
-      );
-    }
-    return logs.take(8).toList(growable: false);
-  }
-
-  double _avgSpread(List<NbaMarket> markets) {
-    if (markets.isEmpty) return 0;
-    return markets.fold<double>(0, (sum, item) => sum + item.spreadBps) /
-        markets.length;
+  List<NbaPredictionActivity> _tradeTape(
+      PlatformHomeModel home, NbaMarket market) {
+    final feed = [
+      ...home.recentPredictions,
+      ...home.activityFeed,
+    ].where((item) {
+      final hay = item.market.toLowerCase();
+      return hay.contains(market.yesLabel.toLowerCase()) ||
+          hay.contains(market.noLabel.toLowerCase()) ||
+          hay.contains(market.matchup.toLowerCase());
+    }).toList();
+    return feed.isEmpty
+        ? home.activityFeed.take(10).toList(growable: false)
+        : feed.take(10).toList(growable: false);
   }
 
   double _marketMovement(NbaMarket market) {
@@ -1893,39 +1952,29 @@ class _NbaCommandCenterScreenState
         markers.add(i);
       }
     }
-    return markers.take(4).toList(growable: false);
+    return markers.take(5).toList(growable: false);
   }
 
   String _gameClock(NbaLiveGame game) {
-    final status = game.status.trim();
-    if (status == 'Pre-game') {
-      return _formatGameTime(game);
-    }
-    if (status.contains('Q')) {
-      return status;
+    if (game.status == 'Pre-game') {
+      return _timeStamp(game.tipoffTime);
     }
     return '${game.status} • pace ${game.pace.toStringAsFixed(0)}';
   }
 
-  String _formatGameTime(NbaLiveGame game) {
-    final hour = game.tipoffTime.hour.toString().padLeft(2, '0');
-    final minute = game.tipoffTime.minute.toString().padLeft(2, '0');
-    return '$hour:$minute UTC';
-  }
-
   Widget _teamLogo(String team) {
     return Container(
-      width: 24,
-      height: 24,
+      width: 18,
+      height: 18,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: AetherColors.bg,
+        color: AetherColors.bgPanel,
         border: Border.all(color: AetherColors.accentSoft),
       ),
       child: Text(
         _teamCode(team),
         style: const TextStyle(
-          fontSize: 9,
+          fontSize: 8,
           fontWeight: FontWeight.w800,
           color: AetherColors.accent,
         ),
@@ -1939,26 +1988,10 @@ class _NbaCommandCenterScreenState
         .where((part) => part.isNotEmpty)
         .toList(growable: false);
     if (words.length == 1) {
-      return words.first
-          .substring(0, words.first.length.clamp(0, 3))
-          .toUpperCase();
+      final word = words.first;
+      return word.substring(0, word.length < 3 ? word.length : 3).toUpperCase();
     }
-    return words.map((word) => word[0]).take(3).join().toUpperCase();
-  }
-
-  String _labelize(String key) {
-    return key.replaceAll('_', ' ').split(' ').map((part) {
-      if (part.isEmpty) return part;
-      return '${part[0].toUpperCase()}${part.substring(1)}';
-    }).join(' ');
-  }
-
-  String _timeAgo(DateTime value) {
-    final diff = DateTime.now().toUtc().difference(value.toUtc());
-    if (diff.inMinutes < 1) return 'now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    return '${diff.inDays}d';
+    return words.map((part) => part[0]).take(3).join().toUpperCase();
   }
 
   String _timeStamp(DateTime value) {
@@ -1969,15 +2002,12 @@ class _NbaCommandCenterScreenState
     return '$hour:$minute:$second';
   }
 
-  Color _feedColor(_FeedType type) {
-    switch (type) {
-      case _FeedType.news:
-        return AetherColors.text;
-      case _FeedType.alert:
-        return AetherColors.warning;
-      case _FeedType.signal:
-        return const Color(0xFF43D4FF);
-    }
+  String _timeAgo(DateTime value) {
+    final diff = DateTime.now().toUtc().difference(value.toUtc());
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    return '${diff.inDays}d';
   }
 
   String _usd(double value) => '\$${value.toStringAsFixed(0)}';
@@ -2006,35 +2036,35 @@ class _NbaCommandCenterScreenState
   String _subtitle(NbaSection section) {
     switch (section) {
       case NbaSection.overview:
-        return 'Bloomberg-style NBA prediction intelligence.';
+        return 'Live sports prediction terminal.';
       case NbaSection.liveGames:
-        return 'Live score and market-monitoring workstation.';
+        return 'Game watchlist and market routing.';
       case NbaSection.markets:
-        return 'Terminal-grade NBA prediction market execution.';
+        return 'Execution and intelligence workstation.';
       case NbaSection.myPredictions:
-        return 'Open positions, flow, and execution monitoring.';
+        return 'Prediction execution terminal.';
       case NbaSection.aiAgents:
-        return 'Dense AI signal and market reasoning console.';
+        return 'AI market analysis stream.';
       case NbaSection.strategyLab:
-        return 'Prompt-driven prediction automation terminal.';
+        return 'Strategy intelligence terminal.';
       case NbaSection.news:
-        return 'Breaking sports news linked directly to probability flow.';
+        return 'Breaking news and market impact.';
       case NbaSection.leaderboard:
-        return 'Institutional ranking and signal-performance tracking.';
+        return 'High-density market performance view.';
     }
   }
 }
 
-class _TerminalTickerBar extends StatefulWidget {
-  const _TerminalTickerBar({required this.items});
+class _TickerBar extends StatefulWidget {
+  const _TickerBar({required this.items});
 
   final List<String> items;
 
   @override
-  State<_TerminalTickerBar> createState() => _TerminalTickerBarState();
+  State<_TickerBar> createState() => _TickerBarState();
 }
 
-class _TerminalTickerBarState extends State<_TerminalTickerBar> {
+class _TickerBarState extends State<_TickerBar> {
   final ScrollController _controller = ScrollController();
   Timer? _timer;
 
@@ -2044,7 +2074,7 @@ class _TerminalTickerBarState extends State<_TerminalTickerBar> {
     _timer = Timer.periodic(const Duration(milliseconds: 90), (_) {
       if (!_controller.hasClients) return;
       final max = _controller.position.maxScrollExtent;
-      final next = _controller.offset + 1.6;
+      final next = _controller.offset + 1.4;
       if (next >= max) {
         _controller.jumpTo(0);
       } else {
@@ -2073,8 +2103,8 @@ class _TerminalTickerBarState extends State<_TerminalTickerBar> {
         controller: _controller,
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 18),
-        itemBuilder: (context, index) => Center(
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, index) => Center(
           child: Text(
             items[index],
             style: const TextStyle(
@@ -2088,30 +2118,3 @@ class _TerminalTickerBarState extends State<_TerminalTickerBar> {
     );
   }
 }
-
-class _FeedEntry {
-  const _FeedEntry({
-    required this.type,
-    required this.label,
-    required this.title,
-    required this.detail,
-    required this.timeLabel,
-    this.newsItem,
-  });
-
-  final _FeedType type;
-  final String label;
-  final String title;
-  final String detail;
-  final String timeLabel;
-  final NbaNewsItem? newsItem;
-}
-
-enum _FeedType { news, alert, signal }
-
-const List<String> _drawerTabs = [
-  'AI SIGNALS',
-  'PLAYER STATS',
-  'TEAM TRENDS',
-  'INJURY ALERTS',
-];

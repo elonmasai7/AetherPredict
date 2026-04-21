@@ -14,6 +14,7 @@ __all__ = [
     "notifications",
     "portfolio",
     "reports",
+    "strategy",
     "strategy_engine",
     "trades",
     "vaults",

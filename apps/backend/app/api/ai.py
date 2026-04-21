@@ -159,3 +159,8 @@ def custom_agent(payload: CustomAgentRequest, db: Session = Depends(get_db)) -> 
         suggested_amount=150.0 if payload.risk_level == "aggressive" else 90.0,
         impact_level="high" if preview["confidence"] >= 0.75 else "medium",
     )
+
+
+@router.post("/run-agent", response_model=AiPredictionResponse)
+def run_agent(payload: CustomAgentRequest, db: Session = Depends(get_db)) -> AiPredictionResponse:
+    return custom_agent(payload, db)

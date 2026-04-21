@@ -29,6 +29,7 @@ from app.api import (
     predictions,
     copy_trading,
     reports,
+    strategy,
     strategy_engine,
     trades,
     vaults,
@@ -85,6 +86,7 @@ for route in (
     watchlists.router,
     workspaces.router,
     reports.router,
+    strategy.router,
     strategy_engine.router,
     ws.router,
 ):
