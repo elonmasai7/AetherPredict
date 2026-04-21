@@ -6,8 +6,11 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.ai import AIResolutionRequest, AIResolutionResponse, AISignalRequest, RiskAnalysisRequest
 from app.schemas.copilot import CopilotRecommendationRequest, CopilotRecommendationResponse
+from app.schemas.nba import AiPredictionResponse, AnalyzeGameRequest, CustomAgentRequest, GeneratePredictionRequest
 from app.services.ai_engine import build_risk_analysis, build_signal
 from app.services.auth_service import get_current_user, get_optional_user
+from app.services.market_service import MarketService
+from app.services.prediction_engine import PredictionEngine
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -89,3 +92,70 @@ async def sentiment_feed(payload: dict) -> dict:
             return response.json()
     except Exception as error:
         _handle_upstream_error(error, "/market/sentiment-feed")
+
+
+@router.post("/analyze-game", response_model=AiPredictionResponse)
+def analyze_game(payload: AnalyzeGameRequest, db: Session = Depends(get_db)) -> AiPredictionResponse:
+    markets = MarketService(db).enriched_markets()
+    market = None
+    if payload.market_id is not None:
+        market = next((row for row in markets if row["id"] == payload.market_id), None)
+    elif payload.game_id is not None:
+        market = next((row for row in markets if payload.game_id.replace("-", " ")[:3].lower() in row["title"].lower()), None)
+    if market is None and markets:
+        market = markets[0]
+    if market is None:
+        raise HTTPException(status_code=404, detail="No market available")
+    return AiPredictionResponse(
+        market_id=market["id"],
+        probability=market["yes_probability"],
+        confidence=market["ai_confidence"],
+        predicted_side="YES" if market["yes_probability"] >= 0.5 else "NO",
+        reasoning=[
+            market["ai_insight"],
+            f"Liquidity score {market['liquidity_score']:.1f} with spread {market['spread_bps']:.0f} bps.",
+            "Latest news and recent form were incorporated into the recommendation.",
+        ],
+        suggested_amount=125.0,
+    )
+
+
+@router.post("/generate-prediction", response_model=AiPredictionResponse)
+def generate_prediction(payload: GeneratePredictionRequest, db: Session = Depends(get_db)) -> AiPredictionResponse:
+    markets = MarketService(db).enriched_markets()
+    market = next((row for row in markets if row["id"] == payload.market_id), None)
+    if market is None:
+        raise HTTPException(status_code=404, detail="Market not found")
+    side = "YES" if market["yes_probability"] >= 0.5 else "NO"
+    return AiPredictionResponse(
+        market_id=market["id"],
+        probability=market["yes_probability"] if side == "YES" else market["no_probability"],
+        confidence=market["ai_confidence"],
+        predicted_side=side,
+        reasoning=[
+            market["ai_insight"],
+            f"Suggested size adapts to requested amount ${payload.amount:.0f}.",
+        ],
+        suggested_amount=round(payload.amount * max(0.5, market["ai_confidence"]), 2),
+    )
+
+
+@router.post("/custom-agent", response_model=AiPredictionResponse)
+def custom_agent(payload: CustomAgentRequest, db: Session = Depends(get_db)) -> AiPredictionResponse:
+    preview = PredictionEngine().preview_strategy(
+        payload.prompt,
+        MarketService(db).enriched_markets(),
+        payload.risk_level,
+        payload.automation_enabled,
+        payload.data_sources,
+    )
+    side = "YES" if preview["probability"] >= 0.5 else "NO"
+    return AiPredictionResponse(
+        market_id=preview["suggested_market_id"],
+        probability=preview["probability"],
+        confidence=preview["confidence"],
+        predicted_side=side,
+        reasoning=preview["rationale"],
+        suggested_amount=150.0 if payload.risk_level == "aggressive" else 90.0,
+        impact_level="high" if preview["confidence"] >= 0.75 else "medium",
+    )

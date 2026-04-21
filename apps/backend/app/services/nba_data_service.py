@@ -7,6 +7,27 @@ class NbaDataService:
     def __init__(self) -> None:
         self.now = datetime.now(UTC)
 
+    def teams(self) -> list[dict]:
+        return [
+            {"id": "lal", "name": "Los Angeles Lakers", "short_name": "Lakers", "conference": "West", "color": "#552583", "accent": "#FDB927", "logo_text": "LAL", "win_pct": 0.64, "last_five": "4-1"},
+            {"id": "gsw", "name": "Golden State Warriors", "short_name": "Warriors", "conference": "West", "color": "#1D428A", "accent": "#FFC72C", "logo_text": "GSW", "win_pct": 0.52, "last_five": "2-3"},
+            {"id": "bos", "name": "Boston Celtics", "short_name": "Celtics", "conference": "East", "color": "#007A33", "accent": "#BA9653", "logo_text": "BOS", "win_pct": 0.73, "last_five": "5-0"},
+            {"id": "mil", "name": "Milwaukee Bucks", "short_name": "Bucks", "conference": "East", "color": "#00471B", "accent": "#EEE1C6", "logo_text": "MIL", "win_pct": 0.61, "last_five": "3-2"},
+            {"id": "nyk", "name": "New York Knicks", "short_name": "Knicks", "conference": "East", "color": "#006BB6", "accent": "#F58426", "logo_text": "NYK", "win_pct": 0.58, "last_five": "3-2"},
+            {"id": "mia", "name": "Miami Heat", "short_name": "Heat", "conference": "East", "color": "#98002E", "accent": "#F9A01B", "logo_text": "MIA", "win_pct": 0.55, "last_five": "3-2"},
+            {"id": "den", "name": "Denver Nuggets", "short_name": "Nuggets", "conference": "West", "color": "#0E2240", "accent": "#FEC524", "logo_text": "DEN", "win_pct": 0.67, "last_five": "4-1"},
+            {"id": "min", "name": "Minnesota Timberwolves", "short_name": "Timberwolves", "conference": "West", "color": "#0C2340", "accent": "#78BE20", "logo_text": "MIN", "win_pct": 0.59, "last_five": "3-2"},
+            {"id": "okc", "name": "Oklahoma City Thunder", "short_name": "Thunder", "conference": "West", "color": "#007AC1", "accent": "#EF3B24", "logo_text": "OKC", "win_pct": 0.69, "last_five": "4-1"},
+        ]
+
+    def players(self) -> list[dict]:
+        return [
+            {"id": "lebron-james", "name": "LeBron James", "team_id": "lal", "team_name": "Los Angeles Lakers", "position": "F", "stats_json": {"points": 27.4, "assists": 8.1, "rebounds": 7.5}},
+            {"id": "stephen-curry", "name": "Stephen Curry", "team_id": "gsw", "team_name": "Golden State Warriors", "position": "G", "stats_json": {"points": 28.7, "assists": 6.2, "rebounds": 4.8}},
+            {"id": "nikola-jokic", "name": "Nikola Jokic", "team_id": "den", "team_name": "Denver Nuggets", "position": "C", "stats_json": {"points": 26.1, "assists": 9.0, "rebounds": 12.4}},
+            {"id": "shai-gilgeous-alexander", "name": "Shai Gilgeous-Alexander", "team_id": "okc", "team_name": "Oklahoma City Thunder", "position": "G", "stats_json": {"points": 31.0, "assists": 6.5, "rebounds": 5.7}},
+        ]
+
     def market_seeds(self) -> list[dict]:
         today = self.now
         return [
@@ -266,9 +287,15 @@ class NbaDataService:
         return [
             {
                 "game_id": "nyk-mia-live",
+                "id": "nyk-mia-live",
                 "matchup": "Knicks vs Heat",
                 "status": "Q3 04:12",
                 "tipoff_time": base - timedelta(hours=1, minutes=10),
+                "start_time": base - timedelta(hours=1, minutes=10),
+                "team_a": "New York Knicks",
+                "team_b": "Miami Heat",
+                "team_a_id": "nyk",
+                "team_b_id": "mia",
                 "home_team": "New York Knicks",
                 "away_team": "Miami Heat",
                 "home_score": 82,
@@ -279,9 +306,15 @@ class NbaDataService:
             },
             {
                 "game_id": "lal-gsw-upcoming",
+                "id": "lal-gsw-upcoming",
                 "matchup": "Lakers vs Warriors",
                 "status": "Pre-game",
                 "tipoff_time": base + timedelta(hours=6, minutes=30),
+                "start_time": base + timedelta(hours=6, minutes=30),
+                "team_a": "Los Angeles Lakers",
+                "team_b": "Golden State Warriors",
+                "team_a_id": "lal",
+                "team_b_id": "gsw",
                 "home_team": "Los Angeles Lakers",
                 "away_team": "Golden State Warriors",
                 "home_score": 0,
@@ -292,9 +325,15 @@ class NbaDataService:
             },
             {
                 "game_id": "bos-mil-upcoming",
+                "id": "bos-mil-upcoming",
                 "matchup": "Celtics vs Bucks",
                 "status": "Pre-game",
                 "tipoff_time": base + timedelta(hours=9, minutes=15),
+                "start_time": base + timedelta(hours=9, minutes=15),
+                "team_a": "Boston Celtics",
+                "team_b": "Milwaukee Bucks",
+                "team_a_id": "bos",
+                "team_b_id": "mil",
                 "home_team": "Boston Celtics",
                 "away_team": "Milwaukee Bucks",
                 "home_score": 0,
@@ -304,3 +343,9 @@ class NbaDataService:
                 "headline": "Boston owns the matchup edge in spacing and weak-side defense.",
             },
         ]
+
+    def game_by_id(self, game_id: str) -> dict | None:
+        for game in self.live_games():
+            if game["game_id"] == game_id or game["id"] == game_id:
+                return game
+        return None

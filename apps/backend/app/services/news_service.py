@@ -15,6 +15,7 @@ class NewsService:
                 "title": "Stephen Curry questionable with ankle soreness ahead of Lakers matchup",
                 "summary": "Availability risk lowers Golden State's half-court creation outlook and trims assist upside for surrounding lineups.",
                 "source": "ESPN Feed",
+                "url": "https://www.espn.com/nba/",
                 "published_at": now - timedelta(minutes=42),
                 "urgency": "high",
                 "team": "Golden State Warriors",
@@ -26,6 +27,7 @@ class NewsService:
                 "title": "Denver leaning bigger in recent rotations, boosting Jokic rebound projection",
                 "summary": "Lineup data suggests more defensive rebound opportunities are flowing to Jokic in closing groups.",
                 "source": "NBA Official Feed",
+                "url": "https://www.nba.com/news",
                 "published_at": now - timedelta(hours=2, minutes=15),
                 "urgency": "medium",
                 "team": "Denver Nuggets",
@@ -37,6 +39,7 @@ class NewsService:
                 "title": "Celtics enter Bucks game on full rest while Milwaukee finishes a travel back-to-back",
                 "summary": "Schedule context reinforces Boston's late-game probability edge and defensive consistency projection.",
                 "source": "Associated Sports RSS",
+                "url": "https://www.espn.com/nba/",
                 "published_at": now - timedelta(hours=3, minutes=4),
                 "urgency": "medium",
                 "team": "Boston Celtics",
@@ -48,6 +51,7 @@ class NewsService:
                 "title": "MVP race tightens as voters focus on efficiency and team record balance",
                 "summary": "Award markets remain fluid with SGA, Jokic, and Tatum separated by narrow narrative and performance bands.",
                 "source": "Sports RSS",
+                "url": "https://www.nba.com/news",
                 "published_at": now - timedelta(hours=6),
                 "urgency": "low",
                 "team": None,
@@ -68,3 +72,11 @@ class NewsService:
             if player and any(token in title for token in player.split()):
                 relevant.append(item)
         return relevant[:2]
+
+    def news_for_team(self, team: str) -> list[dict]:
+        query = team.lower()
+        return [
+            item
+            for item in self.latest_news()
+            if query in (item.get("team") or "").lower()
+        ]

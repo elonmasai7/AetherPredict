@@ -25,6 +25,19 @@ final marketListProvider = FutureProvider<List<Market>>(
     (ref) async => ref.read(apiClientProvider).fetchMarkets());
 final platformHomeProvider = FutureProvider<PlatformHomeModel>(
     (ref) async => ref.read(apiClientProvider).fetchPlatformHome());
+final nbaGamesProvider = FutureProvider<List<NbaLiveGame>>(
+    (ref) async => ref.read(apiClientProvider).fetchGames());
+final nbaTeamsProvider = FutureProvider<List<NbaTeam>>(
+    (ref) async => ref.read(apiClientProvider).fetchTeams());
+final nbaPlayersProvider = FutureProvider<List<NbaPlayer>>(
+    (ref) async => ref.read(apiClientProvider).fetchPlayers());
+final nbaGameUpdatesProvider = StreamProvider<Map<String, dynamic>>(
+    (ref) => ref.read(apiClientProvider).gameUpdates());
+final liquidityBookProvider =
+    FutureProvider.family<LiquidityBookModel, int>((ref, marketId) async {
+  return ref.read(apiClientProvider).fetchLiquidityBook(marketId);
+});
+final searchQueryProvider = StateProvider<String>((ref) => '');
 final selectedMarketIndexProvider = StateProvider<int>((ref) => 0);
 final selectedMarketProvider = Provider<AsyncValue<Market>>((ref) {
   final marketsValue = ref.watch(marketListProvider);

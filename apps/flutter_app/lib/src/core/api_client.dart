@@ -59,6 +59,39 @@ class ApiClient {
     );
   }
 
+  Future<List<NbaLiveGame>> fetchGames() async {
+    final response = await _get('/games');
+    final payload = _decodeList(response, endpoint: '/games');
+    return payload
+        .map((item) => NbaLiveGame.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<NbaTeam>> fetchTeams() async {
+    final response = await _get('/teams');
+    final payload = _decodeList(response, endpoint: '/teams');
+    return payload
+        .map((item) => NbaTeam.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<NbaPlayer>> fetchPlayers() async {
+    final response = await _get('/players');
+    final payload = _decodeList(response, endpoint: '/players');
+    return payload
+        .map((item) => NbaPlayer.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<NbaNewsItem>> fetchNews({String? team}) async {
+    final endpoint = team == null ? '/news' : '/news/team/$team';
+    final response = await _get(endpoint);
+    final payload = _decodeList(response, endpoint: endpoint);
+    return payload
+        .map((item) => NbaNewsItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<StrategyPreviewModel> previewStrategy({
     required String prompt,
     required List<String> dataSources,
@@ -74,6 +107,76 @@ class ApiClient {
     return StrategyPreviewModel.fromJson(
       _decodeMap(response, endpoint: '/platform/strategy/preview'),
     );
+  }
+
+  Future<AiPredictionModel> analyzeGame({
+    String? gameId,
+    int? marketId,
+  }) async {
+    final response = await _post('/ai/analyze-game', {
+      if (gameId != null) 'game_id': gameId,
+      if (marketId != null) 'market_id': marketId,
+    });
+    return AiPredictionModel.fromJson(
+      _decodeMap(response, endpoint: '/ai/analyze-game'),
+    );
+  }
+
+  Future<AiPredictionModel> generatePrediction({
+    required int marketId,
+    double amount = 100,
+  }) async {
+    final response = await _post('/ai/generate-prediction', {
+      'market_id': marketId,
+      'amount': amount,
+    });
+    return AiPredictionModel.fromJson(
+      _decodeMap(response, endpoint: '/ai/generate-prediction'),
+    );
+  }
+
+  Future<AiPredictionModel> runCustomAgent({
+    required String prompt,
+    required String riskLevel,
+    required List<String> dataSources,
+    required bool automationEnabled,
+  }) async {
+    final response = await _post('/ai/custom-agent', {
+      'prompt': prompt,
+      'risk_level': riskLevel,
+      'data_sources': dataSources,
+      'automation_enabled': automationEnabled,
+    });
+    return AiPredictionModel.fromJson(
+      _decodeMap(response, endpoint: '/ai/custom-agent'),
+    );
+  }
+
+  Future<LiquidityBookModel> fetchLiquidityBook(int marketId) async {
+    final response = await _get('/liquidity/$marketId');
+    return LiquidityBookModel.fromJson(
+      _decodeMap(response, endpoint: '/liquidity/$marketId'),
+    );
+  }
+
+  Future<Map<String, dynamic>> addLiquidity({
+    required int marketId,
+    required double amount,
+    String? walletAddress,
+  }) async {
+    final response = await _post('/liquidity/add', {
+      'market_id': marketId,
+      'amount': amount,
+      if (walletAddress != null) 'wallet_address': walletAddress,
+    });
+    return _decodeMap(response, endpoint: '/liquidity/add');
+  }
+
+  Future<Map<String, dynamic>> closePosition(int predictionId) async {
+    final response = await _post('/close-position', {
+      'prediction_id': predictionId,
+    });
+    return _decodeMap(response, endpoint: '/close-position');
   }
 
   Future<LiquidityDetail> fetchMarketLiquidity(String marketId) async {
@@ -550,6 +653,13 @@ class ApiClient {
       'order_type': 'MARKET',
     });
     return TradeExecution.fromJson(_decodeMap(response, endpoint: '/trades'));
+  }
+
+  Stream<Map<String, dynamic>> gameUpdates() {
+    final ws = AppConfig.wsGamesUrl;
+    final channel = WebSocketChannel.connect(Uri.parse(ws));
+    return channel.stream
+        .map((event) => jsonDecode(event as String) as Map<String, dynamic>);
   }
 
   Future<List<WalletBalance>> fetchWalletBalances() async {

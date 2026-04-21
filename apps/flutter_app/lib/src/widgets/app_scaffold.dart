@@ -6,7 +6,6 @@ import '../core/providers.dart';
 import '../core/theme.dart';
 import '../core/wallet_service.dart';
 import 'enterprise/enterprise_components.dart';
-import 'live_signal_bar.dart';
 
 class _NavItem {
   const _NavItem(this.label, this.path, this.icon, {this.mobile = false});
@@ -26,10 +25,9 @@ const _navItems = [
       'My Predictions', '/my-predictions', Icons.account_balance_wallet_rounded,
       mobile: true),
   _NavItem('AI Agents', '/ai-agents', Icons.psychology_alt_rounded),
+  _NavItem('Strategy Lab', '/strategy-lab', Icons.hub_outlined),
   _NavItem('News', '/news', Icons.newspaper_rounded),
   _NavItem('Leaderboard', '/leaderboard', Icons.leaderboard_rounded),
-  _NavItem('Strategy Lab', '/strategy-lab', Icons.hub_outlined),
-  _NavItem('Settings', '/settings', Icons.settings_outlined),
 ];
 
 class AppScaffold extends ConsumerWidget {
@@ -38,11 +36,15 @@ class AppScaffold extends ConsumerWidget {
     required this.title,
     required this.child,
     this.subtitle,
+    this.headerBottom,
+    this.sidebarFooter,
   });
 
   final String title;
   final String? subtitle;
   final Widget child;
+  final Widget? headerBottom;
+  final Widget? sidebarFooter;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,7 +52,8 @@ class AppScaffold extends ConsumerWidget {
     final compact = MediaQuery.of(context).size.width < 1160;
     final wallet = ref.watch(walletSessionProvider);
     final auth = ref.watch(authSessionProvider);
-    final portfolio = ref.watch(portfolioProvider);
+    final balances = ref.watch(walletBalancesProvider);
+    final searchQuery = ref.watch(searchQueryProvider);
 
     ref.read(authSessionProvider.notifier).restore();
     ref.read(walletSessionProvider.notifier).restore();
@@ -58,23 +61,11 @@ class AppScaffold extends ConsumerWidget {
     ref.listen(txUpdatesProvider, (previous, next) {
       next.whenData((update) {
         if (!context.mounted) return;
-        final message = update.status.toLowerCase() == 'confirmed'
-            ? 'Forecast position ${update.tradeId ?? ''} settled on-chain.'
-            : 'Forecast update: ${update.status}';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(message), duration: const Duration(seconds: 3)),
+          SnackBar(content: Text('Prediction update: ${update.status}')),
         );
       });
     });
-
-    final portfolioSummary = portfolio.maybeWhen(
-      data: (positions) {
-        final pnl = positions.fold<double>(0, (sum, item) => sum + item.pnl);
-        return '${positions.length} open forecasts • ${formatUsd(pnl, fractionDigits: 0)} forecast PnL';
-      },
-      orElse: () => 'Positions syncing',
-    );
 
     if (!auth.isAuthenticated &&
         path != '/login' &&
@@ -87,23 +78,33 @@ class AppScaffold extends ConsumerWidget {
       });
     }
 
+    final balanceLabel = balances.maybeWhen(
+      data: (items) {
+        final total = items.fold<double>(0, (sum, item) => sum + item.valueUsd);
+        return formatUsd(total, fractionDigits: 0);
+      },
+      orElse: () => '\$0',
+    );
+
     return Scaffold(
       backgroundColor: AetherColors.bg,
       body: SafeArea(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!compact) _Sidebar(path: path),
+            if (!compact) _Sidebar(path: path, footer: sidebarFooter),
             Expanded(
               child: Column(
                 children: [
-                  const LiveSignalBar(),
-                  _TopBar(
-                    title: title,
-                    subtitle: subtitle,
+                  _TopHeader(
                     compact: compact,
-                    portfolioSummary: portfolioSummary,
+                    searchQuery: searchQuery,
                     walletLabel: _walletSummary(wallet),
+                    balanceLabel: balanceLabel,
+                    walletType: wallet.type,
+                    walletConnected: wallet.connected,
+                    onSearchChanged: (value) =>
+                        ref.read(searchQueryProvider.notifier).state = value,
                     onConnectWallet: (type) =>
                         ref.read(walletSessionProvider.notifier).connect(type),
                     onDisconnectWallet: () =>
@@ -117,15 +118,15 @@ class AppScaffold extends ConsumerWidget {
                         context.go('/login');
                       }
                     },
-                    walletType: wallet.type,
-                    walletConnected: wallet.connected,
                   ),
+                  if (headerBottom != null) headerBottom!,
                   Expanded(
                     child: Padding(
-                      padding: EdgeInsets.only(
-                        left: compact ? AetherSpacing.md : AetherSpacing.xl,
-                        right: compact ? AetherSpacing.md : AetherSpacing.xl,
-                        bottom: AetherSpacing.lg,
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? AetherSpacing.md : 12,
+                        12,
+                        compact ? AetherSpacing.md : 12,
+                        12,
                       ),
                       child: child,
                     ),
@@ -148,90 +149,79 @@ class AppScaffold extends ConsumerWidget {
     }
     final address = wallet.address!;
     if (address.length <= 10) {
-      return '${wallet.type?.name.toUpperCase() ?? 'WALLET'} $address';
+      return address;
     }
-    return '${wallet.type?.name.toUpperCase() ?? 'WALLET'} ${address.substring(0, 6)}...${address.substring(address.length - 4)}';
+    return '${address.substring(0, 6)}...${address.substring(address.length - 4)}';
   }
 }
 
 class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.path});
+  const _Sidebar({required this.path, this.footer});
 
   final String path;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 252,
+      width: 228,
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       decoration: const BoxDecoration(
         color: AetherColors.bgElevated,
-        border: Border(right: BorderSide(color: AetherColors.border)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AetherRadii.sm),
-                    color: AetherColors.bgPanel,
-                    border: Border.all(color: AetherColors.border),
-                  ),
-                  child: const Icon(Icons.auto_graph_rounded, size: 16),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'AetherPredict',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'NBA prediction intelligence platform',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(height: 1.35),
-            ),
-            const SizedBox(height: 18),
-            Expanded(
-              child: ListView.separated(
-                itemCount: _navItems.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
-                itemBuilder: (_, index) {
-                  final item = _navItems[index];
-                  final selected =
-                      path == item.path || path.startsWith('${item.path}/');
-                  return _SidebarTile(item: item, selected: selected);
-                },
-              ),
-            ),
-            const Divider(height: 18),
-            Row(
-              children: [
-                const Icon(Icons.sensors,
-                    size: 14, color: AetherColors.success),
-                const SizedBox(width: 8),
-                Text(
-                  'NBA Signal Network Online',
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelSmall
-                      ?.copyWith(color: AetherColors.success),
-                ),
-              ],
-            ),
-          ],
+        border: Border(
+          right: BorderSide(color: AetherColors.accentSoft, width: 1.2),
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          Text(
+            'NBA Platform',
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(letterSpacing: 0.9, color: AetherColors.accent),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.separated(
+              itemCount: _navItems.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 3),
+              itemBuilder: (_, index) {
+                final item = _navItems[index];
+                final selected =
+                    path == item.path || path.startsWith('${item.path}/');
+                return _SidebarTile(item: item, selected: selected);
+              },
+            ),
+          ),
+          if (footer != null) ...[
+            footer!,
+            const SizedBox(height: 6),
+          ],
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AetherColors.bgPanel,
+              borderRadius: BorderRadius.circular(AetherRadii.sm),
+              border: Border.all(color: AetherColors.accentSoft),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.sensors_rounded,
+                    size: 14, color: AetherColors.success),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Signal grid online',
+                    style: TextStyle(fontSize: 11, color: AetherColors.success),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -247,33 +237,42 @@ class _SidebarTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => context.go(item.path),
-      borderRadius: BorderRadius.circular(AetherRadii.md),
+      borderRadius: BorderRadius.circular(AetherRadii.sm),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AetherRadii.md),
-          color: selected ? AetherColors.bgPanel : Colors.transparent,
+          borderRadius: BorderRadius.circular(AetherRadii.sm),
+          color: selected ? AetherColors.bgPanel : AetherColors.bgElevated,
           border: Border.all(
-            color: selected ? AetherColors.accentSoft : Colors.transparent,
+            color: selected ? AetherColors.accent : AetherColors.border,
           ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: AetherColors.accent.withValues(alpha: 0.18),
+                    blurRadius: 14,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           children: [
             Icon(
               item.icon,
-              size: 18,
+              size: 16,
               color: selected ? AetherColors.text : AetherColors.muted,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 item.label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: selected ? AetherColors.text : AetherColors.muted,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    ),
+                style: TextStyle(
+                  color: selected ? AetherColors.text : AetherColors.muted,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -283,37 +282,37 @@ class _SidebarTile extends StatelessWidget {
   }
 }
 
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.title,
-    required this.subtitle,
+class _TopHeader extends StatelessWidget {
+  const _TopHeader({
     required this.compact,
-    required this.portfolioSummary,
+    required this.searchQuery,
     required this.walletLabel,
+    required this.balanceLabel,
+    required this.walletType,
+    required this.walletConnected,
+    required this.onSearchChanged,
     required this.onConnectWallet,
     required this.onDisconnectWallet,
     required this.onSignOut,
-    required this.walletType,
-    required this.walletConnected,
   });
 
-  final String title;
-  final String? subtitle;
   final bool compact;
-  final String portfolioSummary;
+  final String searchQuery;
   final String walletLabel;
+  final String balanceLabel;
+  final WalletType? walletType;
+  final bool walletConnected;
+  final ValueChanged<String> onSearchChanged;
   final ValueChanged<WalletType> onConnectWallet;
   final VoidCallback onDisconnectWallet;
   final VoidCallback onSignOut;
-  final WalletType? walletType;
-  final bool walletConnected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: compact ? 96 : 90,
+      height: 56,
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? AetherSpacing.md : AetherSpacing.xl,
+        horizontal: compact ? AetherSpacing.md : 12,
       ),
       decoration: const BoxDecoration(
         color: AetherColors.bg,
@@ -321,67 +320,82 @@ class _TopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AetherRadii.sm),
+                  color: AetherColors.bgPanel,
+                  border: Border.all(color: AetherColors.border),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle!,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+                child: const Icon(Icons.sports_basketball_rounded, size: 14),
+              ),
+              if (!compact) ...[
+                const SizedBox(width: 6),
+                const Text(
+                  'AetherPredict',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
               ],
+            ],
+          ),
+          Expanded(
+            child: Container(
+              height: 34,
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AetherColors.bgElevated,
+                borderRadius: BorderRadius.circular(AetherRadii.md),
+                border: Border.all(color: AetherColors.border),
+              ),
+              child: TextField(
+                key: const ValueKey('global-search'),
+                onChanged: onSearchChanged,
+                controller: TextEditingController(text: searchQuery)
+                  ..selection = TextSelection.collapsed(
+                    offset: searchQuery.length,
+                  ),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search_rounded, size: 16),
+                  hintText: 'Search teams, players, markets',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  contentPadding: EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
             ),
           ),
-          if (!compact) ...[
-            StatusBadge(label: portfolioSummary),
-            const SizedBox(width: 8),
-            const StatusBadge(label: 'News + Game Feeds Healthy'),
-            const SizedBox(width: 8),
-            StatusBadge(
-              label: walletLabel,
-              color:
-                  walletConnected ? AetherColors.success : AetherColors.warning,
-            ),
-            const SizedBox(width: 8),
-          ],
+          if (!compact)
+            _HeaderBadge(
+                label: balanceLabel, icon: Icons.account_balance_wallet),
+          const SizedBox(width: 6),
+          if (!compact)
+            const _HeaderBadge(label: 'HashKey', icon: Icons.hub_rounded),
+          const SizedBox(width: 6),
           _walletMenu(),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: 'NBA news',
-            onPressed: () => context.go('/news'),
-            icon: const Icon(Icons.notifications_none_rounded),
-          ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           PopupMenuButton<String>(
-            tooltip: 'Profile menu',
             onSelected: (value) {
-              if (value == 'settings') {
-                context.go('/settings');
-                return;
-              }
               if (value == 'logout') {
                 onSignOut();
               }
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'settings', child: Text('Settings')),
               PopupMenuItem(value: 'logout', child: Text('Sign out')),
             ],
-            child: const CircleAvatar(
-              radius: 16,
-              backgroundColor: AetherColors.bgPanel,
-              child: Icon(Icons.person_outline, size: 16),
+            child: CircleAvatar(
+              radius: 14,
+              backgroundColor: walletConnected
+                  ? AetherColors.accentSoft
+                  : AetherColors.bgPanel,
+              child: Text(
+                walletConnected ? 'P' : '?',
+                style: const TextStyle(fontSize: 11),
+              ),
             ),
           ),
         ],
@@ -391,7 +405,6 @@ class _TopBar extends StatelessWidget {
 
   Widget _walletMenu() {
     return PopupMenuButton<String>(
-      tooltip: 'Wallet',
       onSelected: (value) {
         if (value == 'disconnect') {
           onDisconnectWallet();
@@ -426,9 +439,7 @@ class _TopBar extends StatelessWidget {
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'phantom', child: Text('Phantom')),
         const PopupMenuItem(
-          value: 'walletconnect',
-          child: Text('WalletConnect'),
-        ),
+            value: 'walletconnect', child: Text('WalletConnect')),
         const PopupMenuItem(value: 'metamask', child: Text('MetaMask')),
         const PopupMenuItem(value: 'coinbase', child: Text('Coinbase Wallet')),
         if (walletConnected) const PopupMenuDivider(),
@@ -436,19 +447,48 @@ class _TopBar extends StatelessWidget {
           const PopupMenuItem(value: 'disconnect', child: Text('Disconnect')),
       ],
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: AetherColors.bgPanel,
           borderRadius: BorderRadius.circular(AetherRadii.md),
           border: Border.all(color: AetherColors.border),
         ),
-        child: const Row(
+        child: Row(
           children: [
-            Icon(Icons.account_balance_wallet_outlined, size: 16),
-            SizedBox(width: 6),
-            Text('Wallet', style: TextStyle(fontSize: 12)),
+            const Icon(Icons.account_balance_wallet_outlined, size: 14),
+            const SizedBox(width: 5),
+            Text(
+              walletConnected ? walletLabel : 'Connect',
+              style: const TextStyle(fontSize: 11),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderBadge extends StatelessWidget {
+  const _HeaderBadge({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: AetherColors.bgPanel,
+        borderRadius: BorderRadius.circular(AetherRadii.md),
+        border: Border.all(color: AetherColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 12),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 11)),
+        ],
       ),
     );
   }
@@ -466,7 +506,6 @@ class _MobileNav extends StatelessWidget {
     final selectedIndex = items.indexWhere(
       (item) => path == item.path || path.startsWith('${item.path}/'),
     );
-
     return NavigationBar(
       selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
       destinations: [

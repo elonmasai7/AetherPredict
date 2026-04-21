@@ -41,6 +41,17 @@ class AppConfig {
     return 'ws://localhost:8000/ws/tx';
   }
 
+  static String get wsGamesUrl {
+    const configured = String.fromEnvironment('WS_GAMES_URL', defaultValue: '');
+    if (configured.isNotEmpty) return configured;
+    if (kIsWeb) {
+      final origin = _webBackendOrigin();
+      final scheme = origin.scheme == 'https' ? 'wss' : 'ws';
+      return '$scheme://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}/ws/games';
+    }
+    return 'ws://localhost:8000/ws/games';
+  }
+
   static String get wsVaultsUrl {
     const configured =
         String.fromEnvironment('WS_VAULTS_URL', defaultValue: '');

@@ -9,3 +9,8 @@ router = APIRouter(prefix="/news", tags=["news"])
 @router.get("", response_model=list[NbaNewsItemResponse])
 def list_news() -> list[NbaNewsItemResponse]:
     return [NbaNewsItemResponse(**item) for item in NewsService().latest_news()]
+
+
+@router.get("/team/{team}", response_model=list[NbaNewsItemResponse])
+def list_team_news(team: str) -> list[NbaNewsItemResponse]:
+    return [NbaNewsItemResponse(**item) for item in NewsService().news_for_team(team)]

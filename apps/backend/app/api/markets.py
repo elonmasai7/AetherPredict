@@ -110,6 +110,15 @@ async def create_market(
     return MarketResponse.model_validate(market, from_attributes=True)
 
 
+@router.post("/create", response_model=MarketResponse, status_code=201)
+async def create_market_alias(
+    payload: CreateMarketRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_optional_user),
+) -> MarketResponse:
+    return await create_market(payload, db, user)
+
+
 @router.patch("/{market_id}/link", response_model=MarketResponse)
 def link_market(market_id: int, payload: dict, db: Session = Depends(get_db), user=Depends(get_current_user)) -> MarketResponse:
     market = db.scalar(select(Market).where(Market.id == market_id))

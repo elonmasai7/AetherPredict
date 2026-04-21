@@ -84,9 +84,15 @@ class NbaOverview {
 class NbaLiveGame {
   const NbaLiveGame({
     required this.gameId,
+    required this.id,
     required this.matchup,
     required this.status,
     required this.tipoffTime,
+    required this.startTime,
+    required this.teamA,
+    required this.teamB,
+    required this.teamAId,
+    required this.teamBId,
     required this.homeTeam,
     required this.awayTeam,
     required this.homeScore,
@@ -97,9 +103,15 @@ class NbaLiveGame {
   });
 
   final String gameId;
+  final String id;
   final String matchup;
   final String status;
   final DateTime tipoffTime;
+  final DateTime startTime;
+  final String teamA;
+  final String teamB;
+  final String teamAId;
+  final String teamBId;
   final String homeTeam;
   final String awayTeam;
   final int homeScore;
@@ -111,9 +123,17 @@ class NbaLiveGame {
   factory NbaLiveGame.fromJson(Map<String, dynamic> json) {
     return NbaLiveGame(
       gameId: json['game_id'] as String,
+      id: (json['id'] as String?) ?? json['game_id'] as String,
       matchup: json['matchup'] as String,
       status: json['status'] as String,
       tipoffTime: DateTime.parse(json['tipoff_time'] as String),
+      startTime: DateTime.parse(
+        (json['start_time'] as String?) ?? json['tipoff_time'] as String,
+      ),
+      teamA: (json['team_a'] as String?) ?? json['home_team'] as String,
+      teamB: (json['team_b'] as String?) ?? json['away_team'] as String,
+      teamAId: (json['team_a_id'] as String?) ?? 'home',
+      teamBId: (json['team_b_id'] as String?) ?? 'away',
       homeTeam: json['home_team'] as String,
       awayTeam: json['away_team'] as String,
       homeScore: (json['home_score'] as num).toInt(),
@@ -131,6 +151,7 @@ class NbaNewsItem {
     required this.title,
     required this.summary,
     required this.source,
+    required this.url,
     required this.publishedAt,
     required this.urgency,
     required this.tag,
@@ -142,6 +163,7 @@ class NbaNewsItem {
   final String title;
   final String summary;
   final String source;
+  final String url;
   final DateTime publishedAt;
   final String urgency;
   final String tag;
@@ -154,6 +176,7 @@ class NbaNewsItem {
       title: json['title'] as String,
       summary: json['summary'] as String,
       source: json['source'] as String,
+      url: json['url'] as String? ?? '',
       publishedAt: DateTime.parse(json['published_at'] as String),
       urgency: json['urgency'] as String,
       tag: json['tag'] as String,
@@ -333,6 +356,75 @@ class NbaMarket {
   }
 }
 
+class NbaTeam {
+  const NbaTeam({
+    required this.id,
+    required this.name,
+    required this.shortName,
+    required this.conference,
+    required this.color,
+    required this.accent,
+    required this.logoText,
+    required this.winPct,
+    required this.lastFive,
+  });
+
+  final String id;
+  final String name;
+  final String shortName;
+  final String conference;
+  final String color;
+  final String accent;
+  final String logoText;
+  final double winPct;
+  final String lastFive;
+
+  factory NbaTeam.fromJson(Map<String, dynamic> json) {
+    return NbaTeam(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      shortName: json['short_name'] as String,
+      conference: json['conference'] as String,
+      color: json['color'] as String,
+      accent: json['accent'] as String,
+      logoText: json['logo_text'] as String,
+      winPct: (json['win_pct'] as num).toDouble(),
+      lastFive: json['last_five'] as String,
+    );
+  }
+}
+
+class NbaPlayer {
+  const NbaPlayer({
+    required this.id,
+    required this.name,
+    required this.teamId,
+    required this.teamName,
+    required this.position,
+    required this.statsJson,
+  });
+
+  final String id;
+  final String name;
+  final String teamId;
+  final String teamName;
+  final String position;
+  final Map<String, dynamic> statsJson;
+
+  factory NbaPlayer.fromJson(Map<String, dynamic> json) {
+    return NbaPlayer(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      teamId: json['team_id'] as String,
+      teamName: json['team_name'] as String,
+      position: json['position'] as String,
+      statsJson: Map<String, dynamic>.from(
+        json['stats_json'] as Map? ?? const {},
+      ),
+    );
+  }
+}
+
 class NbaPredictionActivity {
   const NbaPredictionActivity({
     required this.id,
@@ -400,6 +492,79 @@ class StrategyPreviewModel {
       safeguards: (json['safeguards'] as List<dynamic>? ?? const [])
           .map((item) => item.toString())
           .toList(),
+    );
+  }
+}
+
+class AiPredictionModel {
+  const AiPredictionModel({
+    required this.marketId,
+    required this.probability,
+    required this.confidence,
+    required this.predictedSide,
+    required this.reasoning,
+    required this.suggestedAmount,
+    this.impactLevel,
+  });
+
+  final int? marketId;
+  final double probability;
+  final double confidence;
+  final String predictedSide;
+  final List<String> reasoning;
+  final double suggestedAmount;
+  final String? impactLevel;
+
+  factory AiPredictionModel.fromJson(Map<String, dynamic> json) {
+    return AiPredictionModel(
+      marketId: json['market_id'] as int?,
+      probability: (json['probability'] as num).toDouble(),
+      confidence: (json['confidence'] as num).toDouble(),
+      predictedSide: json['predicted_side'] as String,
+      reasoning: (json['reasoning'] as List<dynamic>? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      suggestedAmount: (json['suggested_amount'] as num).toDouble(),
+      impactLevel: json['impact_level'] as String?,
+    );
+  }
+}
+
+class LiquidityBookModel {
+  const LiquidityBookModel({
+    required this.marketId,
+    required this.liquidity,
+    required this.spread,
+    required this.depth,
+    required this.slippage,
+    required this.liquidityScore,
+    required this.bids,
+    required this.asks,
+  });
+
+  final int marketId;
+  final double liquidity;
+  final double spread;
+  final double depth;
+  final double slippage;
+  final double liquidityScore;
+  final List<Map<String, dynamic>> bids;
+  final List<Map<String, dynamic>> asks;
+
+  factory LiquidityBookModel.fromJson(Map<String, dynamic> json) {
+    List<Map<String, dynamic>> rows(String key) =>
+        (json[key] as List<dynamic>? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+    return LiquidityBookModel(
+      marketId: (json['market_id'] as num).toInt(),
+      liquidity: (json['liquidity'] as num).toDouble(),
+      spread: (json['spread'] as num).toDouble(),
+      depth: (json['depth'] as num).toDouble(),
+      slippage: (json['slippage'] as num).toDouble(),
+      liquidityScore: (json['liquidity_score'] as num).toDouble(),
+      bids: rows('bids'),
+      asks: rows('asks'),
     );
   }
 }

@@ -14,9 +14,15 @@ class NbaOverviewResponse(BaseModel):
 
 class NbaLiveGameResponse(BaseModel):
     game_id: str
+    id: str | None = None
     matchup: str
     status: str
     tipoff_time: datetime
+    start_time: datetime | None = None
+    team_a: str | None = None
+    team_b: str | None = None
+    team_a_id: str | None = None
+    team_b_id: str | None = None
     home_team: str
     away_team: str
     home_score: int
@@ -31,6 +37,7 @@ class NbaNewsItemResponse(BaseModel):
     title: str
     summary: str
     source: str
+    url: str
     published_at: datetime
     urgency: str
     team: str | None = None
@@ -97,6 +104,108 @@ class PredictionActivityResponse(BaseModel):
     confidence: str
     amount: float
     created_at: datetime
+
+
+class NbaTeamResponse(BaseModel):
+    id: str
+    name: str
+    short_name: str
+    conference: str
+    color: str
+    accent: str
+    logo_text: str
+    win_pct: float
+    last_five: str
+
+
+class NbaPlayerResponse(BaseModel):
+    id: str
+    name: str
+    team_id: str
+    team_name: str
+    position: str
+    stats_json: dict
+
+
+class MarketCreateRequest(BaseModel):
+    title: str
+    description: str
+    category: str
+    oracle_source: str
+    expiry_at: datetime
+    yes_label: str = "Yes"
+    no_label: str = "No"
+    liquidity_amount: float = 0
+    wallet_address: str | None = None
+
+
+class PredictRequest(BaseModel):
+    market_id: int
+    user_id: int | None = None
+    choice: str
+    amount: float
+    confidence: float = 0.7
+    wallet_address: str | None = None
+
+
+class ClosePredictionRequest(BaseModel):
+    prediction_id: int
+    wallet_address: str | None = None
+
+
+class PredictionResponse(BaseModel):
+    id: int
+    user_id: int
+    market_id: int
+    choice: str
+    amount: float
+    entry_price: float
+    status: str
+    tx_status: str
+
+
+class AnalyzeGameRequest(BaseModel):
+    game_id: str | None = None
+    market_id: int | None = None
+
+
+class GeneratePredictionRequest(BaseModel):
+    market_id: int
+    amount: float = 100
+
+
+class CustomAgentRequest(BaseModel):
+    prompt: str
+    risk_level: str = "balanced"
+    data_sources: list[str] = []
+    automation_enabled: bool = False
+
+
+class AiPredictionResponse(BaseModel):
+    market_id: int | None = None
+    probability: float
+    confidence: float
+    predicted_side: str
+    reasoning: list[str]
+    suggested_amount: float
+    impact_level: str | None = None
+
+
+class LiquidityResponse(BaseModel):
+    market_id: int
+    liquidity: float
+    spread: float
+    depth: float
+    slippage: float
+    liquidity_score: float
+    bids: list[dict]
+    asks: list[dict]
+
+
+class AddLiquidityRequest(BaseModel):
+    market_id: int
+    amount: float
+    wallet_address: str | None = None
 
 
 class StrategyPreviewRequest(BaseModel):
