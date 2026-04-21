@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'constants.dart';
 import 'models.dart';
+import 'nba_models.dart';
 import '../features/strategy_engine/strategy_engine_models.dart';
 
 class ApiClient {
@@ -51,11 +52,37 @@ class ApiClient {
         .toList();
   }
 
+  Future<PlatformHomeModel> fetchPlatformHome() async {
+    final response = await _get('/platform/home');
+    return PlatformHomeModel.fromJson(
+      _decodeMap(response, endpoint: '/platform/home'),
+    );
+  }
+
+  Future<StrategyPreviewModel> previewStrategy({
+    required String prompt,
+    required List<String> dataSources,
+    required String riskLevel,
+    required bool automationEnabled,
+  }) async {
+    final response = await _post('/platform/strategy/preview', {
+      'prompt': prompt,
+      'data_sources': dataSources,
+      'risk_level': riskLevel,
+      'automation_enabled': automationEnabled,
+    });
+    return StrategyPreviewModel.fromJson(
+      _decodeMap(response, endpoint: '/platform/strategy/preview'),
+    );
+  }
+
   Future<LiquidityDetail> fetchMarketLiquidity(String marketId) async {
     final response = await _get('/markets/$marketId/liquidity');
-    final payload = _decodeMap(response, endpoint: '/markets/$marketId/liquidity');
+    final payload =
+        _decodeMap(response, endpoint: '/markets/$marketId/liquidity');
     return LiquidityDetail.fromJson(
-      Map<String, dynamic>.from(payload['liquidity_intelligence'] as Map? ?? {}),
+      Map<String, dynamic>.from(
+          payload['liquidity_intelligence'] as Map? ?? {}),
     );
   }
 
@@ -395,14 +422,16 @@ class ApiClient {
 
   Future<List<StrategyTemplateModel>> fetchStrategyTemplates() async {
     final response = await _get('/strategy-engine/templates');
-    final payload = _decodeList(response, endpoint: '/strategy-engine/templates');
+    final payload =
+        _decodeList(response, endpoint: '/strategy-engine/templates');
     return payload
         .map((item) =>
             StrategyTemplateModel.fromJson(item as Map<String, dynamic>))
         .toList();
   }
 
-  Future<StrategyBuildResultModel> buildStrategyFromPrompt(String prompt) async {
+  Future<StrategyBuildResultModel> buildStrategyFromPrompt(
+      String prompt) async {
     final response = await _post('/strategy-engine/build', {'prompt': prompt});
     return StrategyBuildResultModel.fromJson(
         _decodeMap(response, endpoint: '/strategy-engine/build'));
@@ -410,8 +439,8 @@ class ApiClient {
 
   Future<CanonActionResultModel> runCanonCommand(
       String strategyId, String command) async {
-    final response =
-        await _post('/strategy-engine/strategies/$strategyId/canon/$command', {});
+    final response = await _post(
+        '/strategy-engine/strategies/$strategyId/canon/$command', {});
     return CanonActionResultModel.fromJson(_decodeMap(response,
         endpoint: '/strategy-engine/strategies/$strategyId/canon/$command'));
   }
@@ -420,7 +449,7 @@ class ApiClient {
     final response = await _get('/strategy-engine/monitor');
     final payload =
         _decodeMap(response, endpoint: '/strategy-engine/monitor')['logs']
-            as List<dynamic>? ??
+                as List<dynamic>? ??
             [];
     return payload
         .map((item) =>
@@ -432,7 +461,7 @@ class ApiClient {
     final response = await _get('/strategy-engine/ranking');
     final payload =
         _decodeMap(response, endpoint: '/strategy-engine/ranking')['entries']
-            as List<dynamic>? ??
+                as List<dynamic>? ??
             [];
     return payload
         .map((item) =>
@@ -440,7 +469,8 @@ class ApiClient {
         .toList();
   }
 
-  Future<CanonProjectExportModel> exportStrategyProject(String strategyId) async {
+  Future<CanonProjectExportModel> exportStrategyProject(
+      String strategyId) async {
     final response =
         await _get('/strategy-engine/strategies/$strategyId/export/manifest');
     return CanonProjectExportModel.fromJson(_decodeMap(response,
@@ -502,6 +532,24 @@ class ApiClient {
     });
     return TradeExecution.fromJson(
         _decodeMap(response, endpoint: '/trades/$tradeId/submit'));
+  }
+
+  Future<TradeExecution> placePrediction({
+    required int marketId,
+    required String side,
+    required double collateralAmount,
+    required double price,
+    required String walletAddress,
+  }) async {
+    final response = await _post('/trades', {
+      'market_id': marketId,
+      'side': side,
+      'collateral_amount': collateralAmount,
+      'price': price,
+      'wallet_address': walletAddress,
+      'order_type': 'MARKET',
+    });
+    return TradeExecution.fromJson(_decodeMap(response, endpoint: '/trades'));
   }
 
   Future<List<WalletBalance>> fetchWalletBalances() async {

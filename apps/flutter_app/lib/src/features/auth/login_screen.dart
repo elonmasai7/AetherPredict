@@ -64,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
 
       if (!mounted) return;
-      context.go('/forecast-overview');
+      context.go('/overview');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -87,7 +87,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .read(walletSessionProvider.notifier)
           .connect(WalletType.walletConnect);
       if (!mounted) return;
-      context.go('/forecast-overview');
+      context.go('/overview');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());
@@ -108,36 +108,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (auth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
-          context.go('/forecast-overview');
+          context.go('/overview');
         }
       });
     }
 
     final infoPanel = EnterprisePanel(
       title: 'AetherPredict',
-      subtitle: 'AI-powered on-chain prediction intelligence infrastructure',
+      subtitle: 'AI-powered NBA prediction intelligence platform',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
           Text(
-            'AetherPredict is an AI-powered on-chain prediction market on HashKey Chain that uses autonomous agents, smart liquidity, and AI-based resolution to deliver secure, real-time forecasting, trading, and risk intelligence for DeFi and financial markets.',
+            'AetherPredict is an AI-powered NBA prediction market built for game outcomes, player props, season markets, real-time news signals, and on-chain or MVP settlement.',
           ),
           SizedBox(height: AetherSpacing.md),
           Text(
-              '• Event-native forecasting workflows and probability intelligence'),
+              '• NBA-first forecasting workflows with clean probability intelligence'),
           SizedBox(height: 6),
           Text(
-              '• AI confidence modeling, evidence timelines, and dispute-aware resolution'),
+              '• AI agents for game analysis, player props, news impact, and custom strategies'),
           SizedBox(height: 6),
           Text(
-              '• Wallet-integrated on-chain settlement and institutional risk controls'),
+              '• Wallet-aware execution with MVP settlement support and production-ready chain hooks'),
         ],
       ),
     );
 
     final formPanel = EnterprisePanel(
       title: 'Sign In',
-      subtitle: 'Access your institutional prediction workspace.',
+      subtitle: 'Access your NBA prediction workspace.',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

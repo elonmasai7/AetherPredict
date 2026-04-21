@@ -21,7 +21,9 @@ from app.api import (
     leaderboard,
     markets,
     notifications,
+    news,
     portfolio,
+    platform,
     copy_trading,
     reports,
     strategy_engine,
@@ -33,6 +35,7 @@ from app.api import (
 )
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
+from app.services.bootstrap import bootstrap_nba_platform
 from app.services.market_data import live_market_data_worker
 from app.services.redis_bus import market_feed_worker
 from app.services.strategy_engine_jobs import strategy_engine_refresh_worker
@@ -69,7 +72,9 @@ for route in (
     discussions.router,
     disputes.router,
     notifications.router,
+    news.router,
     vaults.router,
+    platform.router,
     copy_trading.router,
     watchlists.router,
     workspaces.router,
@@ -119,7 +124,11 @@ async def startup() -> None:
         raise RuntimeError(
             f"Database schema is missing tables: {joined}. Run 'alembic upgrade head' from apps/backend before starting the API."
         )
-    SessionLocal().close()
+    bootstrap_db = SessionLocal()
+    try:
+        bootstrap_nba_platform(bootstrap_db)
+    finally:
+        bootstrap_db.close()
     stream_task = asyncio.create_task(market_feed_worker())
     asset_task = asyncio.create_task(live_market_data_worker())
     receipt_task = asyncio.create_task(tx_receipt_worker())

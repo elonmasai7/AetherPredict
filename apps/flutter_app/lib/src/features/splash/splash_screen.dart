@@ -25,7 +25,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     final authenticated = ref.read(authSessionProvider).isAuthenticated;
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
-    context.go(authenticated ? '/forecast-overview' : '/login');
+    context.go(authenticated ? '/overview' : '/login');
   }
 
   @override
@@ -38,8 +38,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             constraints: const BoxConstraints(maxWidth: 460),
             child: EnterprisePanel(
               title: 'AetherPredict',
-              subtitle:
-                  'Initializing institutional prediction intelligence workspace...',
+              subtitle: 'Initializing NBA prediction intelligence workspace...',
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
@@ -47,7 +46,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   LinearProgressIndicator(minHeight: 8),
                   SizedBox(height: AetherSpacing.md),
                   Text(
-                    'Loading live prediction markets, AI forecast engines, and on-chain resolution telemetry.',
+                    'Loading NBA markets, live game context, AI agents, and settlement services.',
                     style: TextStyle(color: AetherColors.muted),
                     textAlign: TextAlign.center,
                   ),

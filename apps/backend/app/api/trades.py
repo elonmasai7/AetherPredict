@@ -15,6 +15,7 @@ from app.services.copy_trading_service import CopyTradingService
 from app.services.blockchain_service import BlockchainService
 from app.services.copy_trading_service import CopyTradingService
 from app.services.liquidity_engine import LiquidityIntelligenceService
+from app.services.execution_service import ExecutionService
 
 router = APIRouter(prefix="/trades", tags=["trades"])
 
@@ -86,65 +87,17 @@ def create_trade(payload: CreateTradeRequest, db: Session = Depends(get_db), use
         payload.side,
         payload.collateral_amount,
     )
-    shares = round(payload.collateral_amount / max(payload.price, 0.0001), 6)
-    trade = TradeOrder(
-        user_id=user.id,
-        market_id=market.id,
+    trade = ExecutionService(db).execute_prediction(
+        user=user,
+        market=market,
         side=payload.side.upper(),
-        order_type=payload.order_type,
         collateral_amount=payload.collateral_amount,
         price=payload.price,
-        shares=shares,
-        status="BROADCASTING" if payload.signed_payload else "PENDING_SIGNATURE",
         wallet_address=payload.wallet_address,
+        order_type=payload.order_type,
         signed_payload=payload.signed_payload,
-        tx_hash=None,
-        explorer_url=None,
-        gas_estimate=0.0012,
-        gas_fee_native=None,
-        metadata_json={"liquidity_preview": liquidity_preview},
+        liquidity_preview=liquidity_preview,
     )
-    db.add(trade)
-
-    position = PortfolioPosition(
-        user_id=user.id,
-        market_id=market.id,
-        side=payload.side.upper(),
-        size=shares,
-        avg_price=payload.price,
-        mark_price=payload.price,
-        realized_pnl=0,
-        unrealized_pnl=0,
-        pnl=0,
-        status="OPEN",
-    )
-    db.add(position)
-    db.add(
-        TransactionRecord(
-            user_id=user.id,
-            trade=trade,
-            transaction_type="TRADE",
-            asset_symbol=market.collateral_token or "USDC",
-            amount=payload.collateral_amount,
-            status=trade.status,
-            tx_hash=trade.tx_hash,
-            explorer_url=trade.explorer_url,
-            gas_fee_native=trade.gas_fee_native,
-            metadata_json={"market_title": market.title, "side": trade.side},
-        )
-    )
-    db.add(
-        Notification(
-            user_id=user.id,
-            level="info",
-            category="trade",
-            message=f"Trade {trade.status.lower()} for {market.title}",
-            metadata_json={"market_id": market.id, "side": trade.side},
-        )
-    )
-    market.volume += payload.collateral_amount
-    db.commit()
-    db.refresh(trade)
     try:
         copy_service = CopyTradingService(db)
         copied_rows = copy_service.process_source_trade(trade)

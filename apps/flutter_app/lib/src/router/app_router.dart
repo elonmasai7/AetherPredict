@@ -3,29 +3,15 @@ import 'package:go_router/go_router.dart';
 import '../features/agents/agents_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/signup_screen.dart';
-import '../features/copy_trading/copy_trading_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
-import '../features/disputes/dispute_center_screen.dart';
+import '../features/live_games/live_games_screen.dart';
 import '../features/leaderboard/leaderboard_screen.dart';
-import '../features/markets/market_detail_screen.dart';
-import '../features/markets/liquidity_dashboard_screen.dart';
 import '../features/markets/market_list_screen.dart';
-import '../features/markets/trade_screen.dart';
 import '../features/notifications/notifications_screen.dart';
-import '../features/operations/operations_console_screen.dart';
 import '../features/portfolio/portfolio_screen.dart';
-import '../features/reports/reports_screen.dart';
-import '../features/research/research_workspace_screen.dart';
-import '../features/risk/risk_dashboard_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/splash/splash_screen.dart';
-import '../features/status/status_center_screen.dart';
-import '../features/strategy_engine/automation_monitor_screen.dart';
-import '../features/strategy_engine/my_strategies_screen.dart';
-import '../features/strategy_engine/performance_ranking_screen.dart';
 import '../features/strategy_engine/strategy_ai_builder_screen.dart';
-import '../features/strategy_engine/strategy_templates_screen.dart';
-import '../features/vaults/vault_marketplace_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -33,143 +19,54 @@ final appRouter = GoRouter(
     GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
     GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
+    GoRoute(path: '/overview', builder: (_, __) => const DashboardScreen()),
+    GoRoute(path: '/live-games', builder: (_, __) => const LiveGamesScreen()),
+    GoRoute(path: '/markets', builder: (_, __) => const MarketListScreen()),
     GoRoute(
-      path: '/forecast-overview',
-      builder: (_, __) => const DashboardScreen(),
-    ),
-    GoRoute(
-      path: '/live-prediction-markets',
-      builder: (_, __) => const MarketListScreen(),
-    ),
-    GoRoute(
-      path: '/ai-forecast-engine',
-      builder: (_, __) => const MarketDetailScreen(),
-    ),
-    GoRoute(
-      path: '/liquidity-intelligence',
-      builder: (_, __) => const LiquidityDashboardScreen(),
-    ),
-    GoRoute(
-      path: '/create-prediction',
-      builder: (_, __) => const TradeScreen(),
-    ),
-    GoRoute(
-      path: '/my-positions',
-      builder: (_, __) => const PortfolioScreen(),
-    ),
-    GoRoute(
-      path: '/autonomous-agents',
-      builder: (_, __) => const AgentsScreen(),
-    ),
-    GoRoute(
-      path: '/liquidity-vaults',
-      builder: (_, __) => const VaultMarketplaceScreen(),
-    ),
-    GoRoute(
-      path: '/copy-forecasts',
-      builder: (_, __) => const CopyTradingScreen(),
-    ),
-    GoRoute(
-      path: '/risk-intelligence',
-      builder: (_, __) => const RiskDashboardScreen(),
-    ),
-    GoRoute(
-      path: '/market-resolution',
-      builder: (_, __) => const MarketResolutionCenterScreen(),
-    ),
-    GoRoute(path: '/disputes', builder: (_, __) => const DisputeCenterScreen()),
-    GoRoute(
-      path: '/research-thesis',
-      builder: (_, __) => const ResearchWorkspaceScreen(),
-    ),
+        path: '/my-predictions', builder: (_, __) => const PortfolioScreen()),
+    GoRoute(path: '/ai-agents', builder: (_, __) => const AgentsScreen()),
+    GoRoute(path: '/news', builder: (_, __) => const NotificationsScreen()),
     GoRoute(
         path: '/leaderboard', builder: (_, __) => const LeaderboardScreen()),
-    GoRoute(path: '/alerts', builder: (_, __) => const NotificationsScreen()),
-    GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
     GoRoute(
-      path: '/operations',
-      builder: (_, __) => const OperationsConsoleScreen(),
-    ),
-    GoRoute(
-      path: '/strategy-engine',
-      builder: (_, __) => const MyStrategiesScreen(),
-    ),
-    GoRoute(
-      path: '/strategy-engine/templates',
-      builder: (_, __) => const StrategyTemplatesScreen(),
-    ),
-    GoRoute(
-      path: '/strategy-engine/ai-builder',
-      builder: (_, __) => const StrategyAiBuilderScreen(),
-    ),
-    GoRoute(
-      path: '/strategy-engine/automation-monitor',
-      builder: (_, __) => const AutomationMonitorScreen(),
-    ),
-    GoRoute(
-      path: '/strategy-engine/performance-ranking',
-      builder: (_, __) => const PerformanceRankingScreen(),
-    ),
+        path: '/strategy-lab',
+        builder: (_, __) => const StrategyAiBuilderScreen()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     GoRoute(
       path: '/dashboard',
-      redirect: (_, __) => '/forecast-overview',
+      redirect: (_, __) => '/overview',
     ),
     GoRoute(
-      path: '/overview',
-      redirect: (_, __) => '/forecast-overview',
+      path: '/forecast-overview',
+      redirect: (_, __) => '/overview',
     ),
     GoRoute(
-      path: '/markets',
-      redirect: (_, __) => '/live-prediction-markets',
+      path: '/live-prediction-markets',
+      redirect: (_, __) => '/markets',
     ),
     GoRoute(
-      path: '/markets/detail',
-      redirect: (_, __) => '/ai-forecast-engine',
+      path: '/ai-forecast-engine',
+      redirect: (_, __) => '/markets',
     ),
     GoRoute(
-      path: '/trade',
-      redirect: (_, __) => '/create-prediction',
+      path: '/create-prediction',
+      redirect: (_, __) => '/markets',
     ),
     GoRoute(
-      path: '/trading',
-      redirect: (_, __) => '/create-prediction',
+      path: '/my-positions',
+      redirect: (_, __) => '/my-predictions',
     ),
     GoRoute(
-      path: '/portfolio',
-      redirect: (_, __) => '/my-positions',
+      path: '/autonomous-agents',
+      redirect: (_, __) => '/ai-agents',
     ),
     GoRoute(
-      path: '/risk',
-      redirect: (_, __) => '/risk-intelligence',
+      path: '/alerts',
+      redirect: (_, __) => '/news',
     ),
     GoRoute(
-      path: '/research',
-      redirect: (_, __) => '/research-thesis',
-    ),
-    GoRoute(
-      path: '/vaults',
-      redirect: (_, __) => '/liquidity-vaults',
-    ),
-    GoRoute(
-      path: '/liquidity',
-      redirect: (_, __) => '/liquidity-intelligence',
-    ),
-    GoRoute(
-      path: '/copy-trading',
-      redirect: (_, __) => '/copy-forecasts',
-    ),
-    GoRoute(
-      path: '/notifications',
-      redirect: (_, __) => '/alerts',
-    ),
-    GoRoute(
-      path: '/status',
-      redirect: (_, __) => '/market-resolution',
-    ),
-    GoRoute(
-      path: '/strategies',
-      redirect: (_, __) => '/strategy-engine',
+      path: '/strategy-engine/ai-builder',
+      redirect: (_, __) => '/strategy-lab',
     ),
   ],
 );

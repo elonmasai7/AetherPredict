@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 import 'constants.dart';
 import 'models.dart';
+import 'nba_models.dart';
 import '../features/strategy_engine/strategy_engine_models.dart';
 import 'wallet_service.dart';
 
@@ -22,6 +23,8 @@ final walletServiceProvider = Provider<WalletService>((ref) => WalletService());
 
 final marketListProvider = FutureProvider<List<Market>>(
     (ref) async => ref.read(apiClientProvider).fetchMarkets());
+final platformHomeProvider = FutureProvider<PlatformHomeModel>(
+    (ref) async => ref.read(apiClientProvider).fetchPlatformHome());
 final selectedMarketIndexProvider = StateProvider<int>((ref) => 0);
 final selectedMarketProvider = Provider<AsyncValue<Market>>((ref) {
   final marketsValue = ref.watch(marketListProvider);
@@ -41,7 +44,8 @@ final selectedMarketFutureProvider = FutureProvider<Market>((ref) async {
   final selectedIndex = ref.watch(selectedMarketIndexProvider);
   return items[selectedIndex.clamp(0, items.length - 1)];
 });
-final selectedMarketLiquidityProvider = FutureProvider<LiquidityDetail>((ref) async {
+final selectedMarketLiquidityProvider =
+    FutureProvider<LiquidityDetail>((ref) async {
   final market = await ref.watch(selectedMarketFutureProvider.future);
   return ref.read(apiClientProvider).fetchMarketLiquidity(market.id);
 });
@@ -49,8 +53,9 @@ final liquidityDashboardProvider = FutureProvider<LiquidityDashboard>(
     (ref) async => ref.read(apiClientProvider).fetchLiquidityDashboard());
 final predictFlowHealthProvider = FutureProvider<PredictFlowHealth>(
     (ref) async => ref.read(apiClientProvider).fetchPredictFlowHealth());
-final predictFlowMarketsProvider = FutureProvider<List<PredictFlowMarketSnapshot>>(
-    (ref) async => ref.read(apiClientProvider).fetchPredictFlowMarkets());
+final predictFlowMarketsProvider =
+    FutureProvider<List<PredictFlowMarketSnapshot>>(
+        (ref) async => ref.read(apiClientProvider).fetchPredictFlowMarkets());
 final predictFlowDashboardProvider =
     FutureProvider<PredictFlowPortfolio>((ref) async {
   final wallet = ref.watch(walletSessionProvider);
@@ -191,13 +196,11 @@ final strategyEngineStateProvider = FutureProvider<StrategyEngineStateModel>(
 final strategyTemplatesProvider = FutureProvider<List<StrategyTemplateModel>>(
     (ref) async => ref.read(apiClientProvider).fetchStrategyTemplates());
 
-final strategyMonitorProvider =
-    FutureProvider<List<StrategyMonitorLogModel>>(
-        (ref) async => ref.read(apiClientProvider).fetchStrategyMonitor());
+final strategyMonitorProvider = FutureProvider<List<StrategyMonitorLogModel>>(
+    (ref) async => ref.read(apiClientProvider).fetchStrategyMonitor());
 
-final strategyRankingProvider =
-    FutureProvider<List<StrategyRankingEntryModel>>(
-        (ref) async => ref.read(apiClientProvider).fetchStrategyRanking());
+final strategyRankingProvider = FutureProvider<List<StrategyRankingEntryModel>>(
+    (ref) async => ref.read(apiClientProvider).fetchStrategyRanking());
 
 class AuthSessionState {
   const AuthSessionState({

@@ -18,33 +18,17 @@ class _NavItem {
 }
 
 const _navItems = [
-  _NavItem('Forecast Overview', '/forecast-overview', Icons.grid_view_rounded,
+  _NavItem('Overview', '/overview', Icons.grid_view_rounded, mobile: true),
+  _NavItem('Live Games', '/live-games', Icons.sports_basketball_rounded,
       mobile: true),
-  _NavItem('Live Prediction Markets', '/live-prediction-markets',
-      Icons.query_stats_rounded,
+  _NavItem('Markets', '/markets', Icons.query_stats_rounded, mobile: true),
+  _NavItem(
+      'My Predictions', '/my-predictions', Icons.account_balance_wallet_rounded,
       mobile: true),
-  _NavItem('Create Prediction', '/create-prediction', Icons.add_chart_rounded,
-      mobile: true),
-  _NavItem(
-      'My Positions', '/my-positions', Icons.account_balance_wallet_rounded,
-      mobile: true),
-  _NavItem('AI Forecast Engine', '/ai-forecast-engine',
-      Icons.psychology_alt_rounded),
-  _NavItem(
-      'Liquidity Intelligence', '/liquidity-intelligence', Icons.waterfall_chart_rounded),
-  _NavItem(
-      'Strategy Engine', '/strategy-engine', Icons.hub_outlined),
-  _NavItem('Autonomous Agents', '/autonomous-agents', Icons.smart_toy_outlined),
-  _NavItem(
-      'Liquidity Vaults', '/liquidity-vaults', Icons.account_balance_rounded),
-  _NavItem('Risk Intelligence', '/risk-intelligence', Icons.shield_outlined),
-  _NavItem('Market Resolution', '/market-resolution', Icons.gavel_rounded),
-  _NavItem('Disputes', '/disputes', Icons.balance_rounded),
-  _NavItem(
-      'Research & Thesis', '/research-thesis', Icons.manage_search_rounded),
+  _NavItem('AI Agents', '/ai-agents', Icons.psychology_alt_rounded),
+  _NavItem('News', '/news', Icons.newspaper_rounded),
   _NavItem('Leaderboard', '/leaderboard', Icons.leaderboard_rounded),
-  _NavItem('Reports', '/reports', Icons.receipt_long_rounded),
-  _NavItem('Operations', '/operations', Icons.precision_manufacturing_rounded),
+  _NavItem('Strategy Lab', '/strategy-lab', Icons.hub_outlined),
   _NavItem('Settings', '/settings', Icons.settings_outlined),
 ];
 
@@ -212,7 +196,7 @@ class _Sidebar extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'AI-powered on-chain prediction intelligence infrastructure',
+              'NBA prediction intelligence platform',
               style: Theme.of(context)
                   .textTheme
                   .labelSmall
@@ -238,7 +222,7 @@ class _Sidebar extends StatelessWidget {
                     size: 14, color: AetherColors.success),
                 const SizedBox(width: 8),
                 Text(
-                  'Forecast Grid Operational',
+                  'NBA Signal Network Online',
                   style: Theme.of(context)
                       .textTheme
                       .labelSmall
@@ -362,7 +346,7 @@ class _TopBar extends StatelessWidget {
           if (!compact) ...[
             StatusBadge(label: portfolioSummary),
             const SizedBox(width: 8),
-            const StatusBadge(label: 'Resolution Network Healthy'),
+            const StatusBadge(label: 'News + Game Feeds Healthy'),
             const SizedBox(width: 8),
             StatusBadge(
               label: walletLabel,
@@ -374,8 +358,8 @@ class _TopBar extends StatelessWidget {
           _walletMenu(),
           const SizedBox(width: 4),
           IconButton(
-            tooltip: 'Forecast alerts',
-            onPressed: () => context.go('/alerts'),
+            tooltip: 'NBA news',
+            onPressed: () => context.go('/news'),
             icon: const Icon(Icons.notifications_none_rounded),
           ),
           const SizedBox(width: 4),

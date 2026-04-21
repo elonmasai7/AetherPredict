@@ -1,52 +1,62 @@
 # AetherPredict Flutter App
 
-## Web integration smoke flow
+This Flutter client is the main NBA prediction interface for AetherPredict.
 
-The Strategy Engine UI smoke flow can run in a real browser target instead of requiring Linux desktop support.
+It now centers the product around:
 
-Prerequisites:
+- live NBA game context
+- NBA prediction markets
+- AI agents
+- a dedicated news module
+- leaderboard tracking
+- a prompt-driven strategy lab
 
-- local backend healthy at `http://localhost:8000`
-- `chromedriver` installed and on `PATH`
+## Main Routes
 
-Run:
+- `/overview`
+- `/live-games`
+- `/markets`
+- `/my-predictions`
+- `/ai-agents`
+- `/news`
+- `/leaderboard`
+- `/strategy-lab`
+
+## Local Run
+
+```bash
+cd apps/flutter_app
+flutter pub get
+flutter run -d chrome \
+  --dart-define=API_BASE_URL=http://localhost:8000 \
+  --dart-define=WS_MARKETS_URL=ws://localhost:8000/ws/markets \
+  --dart-define=PREDICTFLOW_BASE_URL=http://localhost:8081
+```
+
+## Web Build
+
+```bash
+cd apps/flutter_app
+flutter build web
+```
+
+The backend Docker image copies `build/web`, so build the web bundle before rebuilding the backend container if you want the newest frontend served from `http://localhost:8000`.
+
+## Integration Notes
+
+The Flutter app consumes the NBA-focused backend endpoints:
+
+- `GET /platform/home`
+- `POST /platform/strategy/preview`
+- `GET /news`
+- `GET /markets`
+- `POST /trades`
+
+## Existing Test Script
+
+If you want to run the browser-based integration flow:
 
 ```bash
 cd apps/flutter_app
 ./scripts/run_web_strategy_engine_integration.sh
 ```
-
-Optional overrides:
-
-```bash
-API_BASE_URL=http://localhost:8000 \
-CHROMEDRIVER_BIN=/path/to/chromedriver \
-CHROMEDRIVER_PORT=4444 \
-./scripts/run_web_strategy_engine_integration.sh
-```
-
-The script launches `chromedriver` and runs:
-
-```bash
-flutter drive \
-  --driver=test_driver/integration_test.dart \
-  --target=integration_test/strategy_engine_flow_test.dart \
-  -d web-server \
-  --browser-name=chrome \
-  --headless \
-  --dart-define=API_BASE_URL=http://localhost:8000
-```
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
