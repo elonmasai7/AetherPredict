@@ -1693,6 +1693,14 @@ class _NbaCommandCenterScreenState
     setState(() => _executing = true);
     try {
       final wallet = ref.read(walletSessionProvider);
+      if ((wallet.address ?? '').isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Connect a wallet to place a prediction.')),
+          );
+        }
+        return;
+      }
       await ref.read(apiClientProvider).placePrediction(
             marketId: market.id,
             side: _selectedSide,
@@ -1700,7 +1708,7 @@ class _NbaCommandCenterScreenState
             price: _selectedSide == 'YES'
                 ? market.yesProbability
                 : market.noProbability,
-            walletAddress: wallet.address ?? 'demo-wallet',
+            walletAddress: wallet.address!,
           );
       ref.invalidate(platformHomeProvider);
       ref.invalidate(nbaGamesProvider);

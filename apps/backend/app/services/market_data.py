@@ -3,44 +3,41 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.models.entities import Market
+from app.services.market_service import MarketService
+from app.services.news_service import NewsService
 from app.services.redis_bus import publish
-
-
-def refresh_nba_markets(db: Session) -> list[Market]:
-    markets = db.scalars(
-        select(Market)
-        .where(Market.category.in_(["Game Outcome", "Player Performance", "Season Market"]))
-        .order_by(Market.expiry_at.asc())
-    ).all()
-    touched = False
-    minute_factor = datetime.now(UTC).minute
-    for index, market in enumerate(markets):
-        drift = ((minute_factor + index) % 7 - 3) * 0.0015
-        market.yes_probability = round(min(0.99, max(0.01, market.yes_probability + drift)), 4)
-        market.no_probability = round(1 - market.yes_probability, 4)
-        market.ai_confidence = round(min(0.92, max(0.58, market.ai_confidence + abs(drift) / 2)), 4)
-        metadata = dict(market.metadata_json or {})
-        points = list(metadata.get("probability_points") or [])
-        points.append(market.yes_probability)
-        metadata["probability_points"] = points[-8:]
-        market.metadata_json = metadata
-        touched = True
-    if touched:
-        db.commit()
-    return markets
 
 
 async def live_market_data_worker() -> None:
     while True:
         db: Session = SessionLocal()
         try:
-            markets = refresh_nba_markets(db)
+            market_service = MarketService(db)
+            markets = market_service.sync_live_markets()
+            news_items = NewsService().latest_news()[:8]
+            games = market_service.live_games()
+            timestamp = datetime.now(UTC).isoformat()
+
+            for game in games:
+                await publish(
+                    settings.games_websocket_channel,
+                    {
+                        "type": "game",
+                        "game_id": game["game_id"],
+                        "matchup": game["matchup"],
+                        "status": game["status"],
+                        "home_score": game["home_score"],
+                        "away_score": game["away_score"],
+                        "win_probability_home": game["win_probability_home"],
+                        "headline": game["headline"],
+                        "timestamp": timestamp,
+                    },
+                )
+
             for market in markets:
                 metadata = market.metadata_json or {}
                 await publish(
@@ -52,9 +49,32 @@ async def live_market_data_worker() -> None:
                         "title": market.title,
                         "yes_probability": round(market.yes_probability, 4),
                         "confidence": round(market.ai_confidence, 4),
-                        "headline": metadata.get("player_context", {}).get("trend")
-                        or metadata.get("matchup", market.title),
-                        "timestamp": datetime.now(UTC).isoformat(),
+                        "headline": metadata.get("headline") or metadata.get("matchup") or market.title,
+                        "timestamp": timestamp,
+                    },
+                )
+                await publish(
+                    settings.activity_websocket_channel,
+                    {
+                        "type": "probability_update",
+                        "market_id": market.id,
+                        "market": market.title,
+                        "probability": round(market.yes_probability, 4),
+                        "confidence": round(market.ai_confidence, 4),
+                        "timestamp": timestamp,
+                    },
+                )
+
+            for news_item in news_items:
+                await publish(
+                    settings.activity_websocket_channel,
+                    {
+                        "type": "news",
+                        "title": news_item["title"],
+                        "urgency": news_item["urgency"],
+                        "team": news_item.get("team"),
+                        "player": news_item.get("player"),
+                        "timestamp": news_item["published_at"].isoformat(),
                     },
                 )
         except Exception:

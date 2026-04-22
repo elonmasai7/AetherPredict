@@ -12,7 +12,6 @@ import '../features/strategy_engine/strategy_engine_models.dart';
 import 'wallet_service.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  ref.read(authSessionProvider.notifier).restore();
   return ApiClient(
     readAccessToken: () => ref.read(authSessionProvider).accessToken,
     refreshAccessToken: () =>
@@ -72,9 +71,15 @@ final predictFlowMarketsProvider =
 final predictFlowDashboardProvider =
     FutureProvider<PredictFlowPortfolio>((ref) async {
   final wallet = ref.watch(walletSessionProvider);
-  final walletId = (wallet.address != null && wallet.address!.isNotEmpty)
-      ? wallet.address!
-      : 'demo-wallet';
+  if (wallet.address == null || wallet.address!.isEmpty) {
+    return const PredictFlowPortfolio(
+      wallet: '',
+      collateralBalance: 0,
+      realizedPnl: 0,
+      positions: [],
+    );
+  }
+  final walletId = wallet.address!;
   return ref.read(apiClientProvider).fetchPredictFlowDashboard(walletId);
 });
 

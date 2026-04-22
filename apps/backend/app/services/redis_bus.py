@@ -3,6 +3,7 @@ import contextlib
 import json
 from datetime import datetime, timezone
 
+from redis import Redis as SyncRedis
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,10 +14,45 @@ from app.models.entities import Market
 
 
 redis_client = Redis.from_url(settings.redis_url, decode_responses=True)
+sync_redis_client = SyncRedis.from_url(settings.redis_url, decode_responses=True)
 
 
 async def publish(channel: str, payload: dict) -> None:
     await redis_client.publish(channel, json.dumps(payload))
+
+
+def get_cached_json(key: str):
+    try:
+        raw = sync_redis_client.get(key)
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
+def set_cached_json(key: str, payload, ttl_seconds: int) -> None:
+    try:
+        sync_redis_client.setex(key, max(ttl_seconds, 1), json.dumps(payload))
+    except Exception:
+        return None
+
+
+def get_cached_text(key: str) -> str | None:
+    try:
+        return sync_redis_client.get(key)
+    except Exception:
+        return None
+
+
+def set_cached_text(key: str, value: str, ttl_seconds: int) -> None:
+    try:
+        sync_redis_client.setex(key, max(ttl_seconds, 1), value)
+    except Exception:
+        return None
 
 
 async def market_feed_worker() -> None:

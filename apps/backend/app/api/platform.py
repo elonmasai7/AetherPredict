@@ -1,40 +1,63 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.api.leaderboard import default_leaderboard
 from app.schemas.nba import PlatformHomeResponse, StrategyPreviewRequest, StrategyPreviewResponse
 from app.services.agent_engine import AgentEngine
 from app.services.market_service import MarketService
 from app.services.news_service import NewsService
 from app.services.prediction_engine import PredictionEngine
+from app.services.redis_bus import get_cached_json, set_cached_json
+from app.core.config import settings
 
 router = APIRouter(prefix="/platform", tags=["platform"])
 
 
 @router.get("/home", response_model=PlatformHomeResponse)
 def platform_home(db: Session = Depends(get_db)) -> PlatformHomeResponse:
+    cache_key = "platform:home:v2"
+    cached = get_cached_json(cache_key)
+    if cached is not None:
+        return PlatformHomeResponse.model_validate(cached)
+
     market_service = MarketService(db)
     markets = market_service.enriched_markets()
     news = NewsService().latest_news()
     agents = AgentEngine().build_agents(markets, news)
-    leaderboard = [
-        {"rank": 1, "name": "Baseline Alpha", "accuracy": 71.4, "roi": 24.8, "consistency": 92.0, "predictions": 138, "streak": 9},
-        {"rank": 2, "name": "Paint Pressure", "accuracy": 69.8, "roi": 18.6, "consistency": 88.3, "predictions": 121, "streak": 6},
-        {"rank": 3, "name": "Clutch Model", "accuracy": 68.9, "roi": 16.1, "consistency": 85.1, "predictions": 109, "streak": 4},
-        {"rank": 4, "name": "Transition Edge", "accuracy": 67.2, "roi": 14.9, "consistency": 83.4, "predictions": 98, "streak": 3},
-    ]
-    return PlatformHomeResponse(
-        generated_at=NewsService().now,
-        overview=market_service.overview(),
+    leaderboard_rows = default_leaderboard(db)
+    games = market_service.live_games()
+    response = PlatformHomeResponse(
+        generated_at=datetime.now(UTC),
+        overview=market_service.overview(markets=markets, games=games),
         featured_market_id=markets[0]["id"] if markets else None,
-        live_games=market_service.live_games(),
+        live_games=games,
         markets=markets,
         news=news,
         agents=agents,
-        leaderboard=leaderboard,
+        leaderboard=[
+            {
+                "rank": row.rank,
+                "name": row.name,
+                "accuracy": row.lifetime_accuracy or row.win_rate,
+                "roi": row.roi,
+                "consistency": row.win_rate,
+                "predictions": max(int(row.score), 0),
+                "streak": 0,
+            }
+            for row in leaderboard_rows[:10]
+        ],
         activity_feed=market_service.activity_feed(),
         recent_predictions=market_service.recent_predictions(),
     )
+    set_cached_json(
+        cache_key,
+        response.model_dump(mode="json"),
+        ttl_seconds=max(3, min(settings.live_cache_ttl_seconds, 10)),
+    )
+    return response
 
 
 @router.post("/strategy/preview", response_model=StrategyPreviewResponse)

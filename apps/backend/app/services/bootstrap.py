@@ -11,7 +11,7 @@ from app.services.news_service import NewsService
 
 def bootstrap_nba_platform(db: Session) -> None:
     market_service = MarketService(db)
-    market_service.ensure_seed_data()
+    market_service.sync_live_markets()
     markets = market_service.enriched_markets()
     news = NewsService().latest_news()
     agents = AgentEngine().build_agents(markets, news)

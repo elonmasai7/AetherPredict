@@ -1117,7 +1117,7 @@ class PredictFlowOrderResult {
       orderId: (order['id'] as String?) ?? '',
       marketId: (order['marketId'] as String?) ?? '',
       fillCount: (json['fills'] as List<dynamic>? ?? const []).length,
-      wallet: (order['wallet'] as String?) ?? 'demo-wallet',
+      wallet: (order['wallet'] as String?) ?? '',
       snapshot: PredictFlowMarketSnapshot.fromJson(snapshot),
     );
   }

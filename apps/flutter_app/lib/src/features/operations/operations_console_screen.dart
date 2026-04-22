@@ -483,11 +483,7 @@ class _WalletActivityTab extends ConsumerWidget {
       title: 'Wallet Activity',
       subtitle:
           'PredictFlow wallet activity derived from the local Dart engine portfolio.',
-      rows: rows.isEmpty
-          ? const [
-              _WalletActivityRow('demo-wallet', 'PredictFlow sync', '0', 'Review')
-            ]
-          : rows,
+      rows: rows,
       rowId: (row) => row.address,
       searchHint: 'Search wallet address',
       filters: [

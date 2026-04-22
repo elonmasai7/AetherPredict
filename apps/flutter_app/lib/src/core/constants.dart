@@ -101,6 +101,20 @@ class AppConfig {
       );
     }
 
+    // GitHub Codespaces / port-forwarded hosts often encode the port as a host
+    // prefix, e.g. https://3000-<codespace>.app.github.dev. When we detect that
+    // pattern, remap common frontend ports to the backend port host prefix.
+    final dashIndex = base.host.indexOf('-');
+    if (!isLocalHost && dashIndex > 0) {
+      final prefix = base.host.substring(0, dashIndex);
+      if (prefix == '3000' || prefix == '8080') {
+        return Uri(
+          scheme: base.scheme,
+          host: '8000${base.host.substring(dashIndex)}',
+        );
+      }
+    }
+
     if (base.hasPort) {
       return Uri(
         scheme: base.scheme,

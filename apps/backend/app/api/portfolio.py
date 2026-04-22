@@ -131,8 +131,18 @@ def auto_hedge(payload: AutoHedgeRequest, db: Session = Depends(get_db), user=De
 def wallet_balances(db: Session = Depends(get_db), user=Depends(get_optional_user)) -> list[dict]:
     if user is None or not user.wallet_address:
         return []
-    chain = BlockchainService()
-    native_balance = chain.get_native_balance(user.wallet_address)
+    chain: BlockchainService | None = None
+    try:
+        chain = BlockchainService()
+    except Exception:
+        chain = None
+
+    native_balance = 0.0
+    if chain is not None:
+        try:
+            native_balance = chain.get_native_balance(user.wallet_address)
+        except Exception:
+            native_balance = 0.0
     balance_row = db.scalar(
         select(WalletBalance).where(
             WalletBalance.user_id == user.id,
@@ -168,9 +178,12 @@ def wallet_balances(db: Session = Depends(get_db), user=Depends(get_optional_use
         prices = {}
 
     for symbol, address in (("USDC", settings.hashkey_usdc_address), ("USDT", settings.hashkey_usdt_address)):
-        if not address:
+        if not address or chain is None:
             continue
-        token_balance, _ = chain.get_erc20_balance(address, user.wallet_address)
+        try:
+            token_balance, _ = chain.get_erc20_balance(address, user.wallet_address)
+        except Exception:
+            token_balance = 0.0
         price_id = "usd-coin" if symbol == "USDC" else "tether"
         price = float(prices.get(price_id, {}).get("usd", 1.0)) if prices else 1.0
         row = db.scalar(

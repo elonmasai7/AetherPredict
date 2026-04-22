@@ -38,10 +38,8 @@ from app.api import (
     ws,
 )
 from app.core.config import settings
-from app.db.session import SessionLocal, engine
-from app.services.bootstrap import bootstrap_nba_platform
+from app.db.session import engine
 from app.services.market_data import live_market_data_worker
-from app.services.redis_bus import market_feed_worker
 from app.services.strategy_engine_jobs import strategy_engine_refresh_worker
 from app.services.tx_receipt_worker import tx_receipt_worker
 
@@ -92,7 +90,6 @@ for route in (
 ):
     app.include_router(route)
 
-stream_task: asyncio.Task | None = None
 asset_task: asyncio.Task | None = None
 receipt_task: asyncio.Task | None = None
 strategy_refresh_task: asyncio.Task | None = None
@@ -100,7 +97,7 @@ strategy_refresh_task: asyncio.Task | None = None
 
 @app.on_event("startup")
 async def startup() -> None:
-    global stream_task, asset_task, receipt_task, strategy_refresh_task
+    global asset_task, receipt_task, strategy_refresh_task
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
     required_tables = {
@@ -132,12 +129,6 @@ async def startup() -> None:
         raise RuntimeError(
             f"Database schema is missing tables: {joined}. Run 'alembic upgrade head' from apps/backend before starting the API."
         )
-    bootstrap_db = SessionLocal()
-    try:
-        bootstrap_nba_platform(bootstrap_db)
-    finally:
-        bootstrap_db.close()
-    stream_task = asyncio.create_task(market_feed_worker())
     asset_task = asyncio.create_task(live_market_data_worker())
     receipt_task = asyncio.create_task(tx_receipt_worker())
     strategy_refresh_task = asyncio.create_task(strategy_engine_refresh_worker())
@@ -145,8 +136,8 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
-    global stream_task, asset_task, receipt_task, strategy_refresh_task
-    for task in (stream_task, asset_task, receipt_task, strategy_refresh_task):
+    global asset_task, receipt_task, strategy_refresh_task
+    for task in (asset_task, receipt_task, strategy_refresh_task):
         if task is not None:
             task.cancel()
 

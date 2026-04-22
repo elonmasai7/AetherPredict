@@ -17,13 +17,13 @@ class ExecutionService:
         side: str,
         collateral_amount: float,
         price: float,
-        wallet_address: str,
+        wallet_address: str | None,
         order_type: str = "MARKET",
         signed_payload: str | None = None,
         liquidity_preview: dict | None = None,
     ) -> TradeOrder:
         shares = round(collateral_amount / max(price, 0.01), 6)
-        status = "PENDING_CONFIRMATION" if signed_payload else "SIMULATED_MATCHED"
+        status = "PENDING_CONFIRMATION" if signed_payload else "SUBMITTED"
         trade = TradeOrder(
             user_id=user.id,
             market_id=market.id,
@@ -37,7 +37,7 @@ class ExecutionService:
             signed_payload=signed_payload,
             metadata_json={
                 "liquidity_preview": liquidity_preview or {},
-                "execution_mode": "on_chain" if signed_payload else "mvp_simulated",
+                "execution_mode": "on_chain" if signed_payload else "server_book",
                 "confidence_label": (market.metadata_json or {}).get("confidence_label", "Actionable"),
             },
         )
@@ -70,7 +70,7 @@ class ExecutionService:
                 metadata_json={
                     "market_title": market.title,
                     "side": side,
-                    "execution_mode": "simulated" if not signed_payload else "signed",
+                    "execution_mode": "server_book" if not signed_payload else "signed",
                 },
             )
         )

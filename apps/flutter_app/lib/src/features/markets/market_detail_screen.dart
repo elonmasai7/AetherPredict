@@ -498,12 +498,21 @@ class _MarketDetailScreenState extends ConsumerState<MarketDetailScreen> {
                       ? null
                       : () async {
                           final wallet = ref.read(walletSessionProvider);
+                          if ((wallet.address ?? '').isEmpty) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Connect a wallet to run PredictFlow orders.'),
+                              ),
+                            );
+                            return;
+                          }
                           final apiClient = ref.read(apiClientProvider);
                           final result = await showDialog<bool>(
                             context: context,
                             builder: (_) => _PredictFlowOrderDialog(
                               market: companion,
-                              walletAddress: wallet.address ?? 'demo-wallet',
+                              walletAddress: wallet.address!,
                               apiClient: apiClient,
                             ),
                           );

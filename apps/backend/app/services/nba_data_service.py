@@ -1,351 +1,202 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+
+from app.services.live_data_service import LiveDataService
+from app.services.reference_data import seeded_players, seeded_teams
 
 
 class NbaDataService:
     def __init__(self) -> None:
-        self.now = datetime.now(UTC)
+        self.provider = LiveDataService()
 
     def teams(self) -> list[dict]:
-        return [
-            {"id": "lal", "name": "Los Angeles Lakers", "short_name": "Lakers", "conference": "West", "color": "#552583", "accent": "#FDB927", "logo_text": "LAL", "win_pct": 0.64, "last_five": "4-1"},
-            {"id": "gsw", "name": "Golden State Warriors", "short_name": "Warriors", "conference": "West", "color": "#1D428A", "accent": "#FFC72C", "logo_text": "GSW", "win_pct": 0.52, "last_five": "2-3"},
-            {"id": "bos", "name": "Boston Celtics", "short_name": "Celtics", "conference": "East", "color": "#007A33", "accent": "#BA9653", "logo_text": "BOS", "win_pct": 0.73, "last_five": "5-0"},
-            {"id": "mil", "name": "Milwaukee Bucks", "short_name": "Bucks", "conference": "East", "color": "#00471B", "accent": "#EEE1C6", "logo_text": "MIL", "win_pct": 0.61, "last_five": "3-2"},
-            {"id": "nyk", "name": "New York Knicks", "short_name": "Knicks", "conference": "East", "color": "#006BB6", "accent": "#F58426", "logo_text": "NYK", "win_pct": 0.58, "last_five": "3-2"},
-            {"id": "mia", "name": "Miami Heat", "short_name": "Heat", "conference": "East", "color": "#98002E", "accent": "#F9A01B", "logo_text": "MIA", "win_pct": 0.55, "last_five": "3-2"},
-            {"id": "den", "name": "Denver Nuggets", "short_name": "Nuggets", "conference": "West", "color": "#0E2240", "accent": "#FEC524", "logo_text": "DEN", "win_pct": 0.67, "last_five": "4-1"},
-            {"id": "min", "name": "Minnesota Timberwolves", "short_name": "Timberwolves", "conference": "West", "color": "#0C2340", "accent": "#78BE20", "logo_text": "MIN", "win_pct": 0.59, "last_five": "3-2"},
-            {"id": "okc", "name": "Oklahoma City Thunder", "short_name": "Thunder", "conference": "West", "color": "#007AC1", "accent": "#EF3B24", "logo_text": "OKC", "win_pct": 0.69, "last_five": "4-1"},
-        ]
+        standings_result = self.provider.fetch_standings()
+        standings = standings_result.data if isinstance(standings_result.data, dict) else {}
+        seeded_by_code = {team["id"]: team for team in seeded_teams()}
+        teams: list[dict] = []
+        entries = standings.get("children") or standings.get("standings") or []
+
+        for group in entries:
+            conference = group.get("name") or "Unknown"
+            for standing in group.get("standings", {}).get("entries", []):
+                team = standing.get("team") or {}
+                stats = standing.get("stats") or []
+                stats_map = {item.get("name"): item.get("value") for item in stats if item.get("name")}
+                abbreviation = team.get("abbreviation") or ""
+                seeded = seeded_by_code.get(abbreviation, {})
+                teams.append(
+                    {
+                        "id": abbreviation or str(team.get("id") or ""),
+                        "name": team.get("displayName") or team.get("name") or seeded.get("name") or "",
+                        "short_name": team.get("shortDisplayName") or abbreviation or seeded.get("short_name") or "",
+                        "conference": seeded.get("conference") or conference,
+                        "color": f"#{team.get('color')}" if team.get("color") else seeded.get("color", "#111827"),
+                        "accent": f"#{team.get('alternateColor')}" if team.get("alternateColor") else seeded.get("accent", "#374151"),
+                        "logo_text": abbreviation or seeded.get("logo_text", ""),
+                        "win_pct": float(stats_map.get("winPercent") or 0.0),
+                        "last_five": self._last_ten(stats_map),
+                    }
+                )
+        teams = [team for team in teams if team["id"] and team["name"]]
+        return teams or seeded_teams()
 
     def players(self) -> list[dict]:
-        return [
-            {"id": "lebron-james", "name": "LeBron James", "team_id": "lal", "team_name": "Los Angeles Lakers", "position": "F", "stats_json": {"points": 27.4, "assists": 8.1, "rebounds": 7.5}},
-            {"id": "stephen-curry", "name": "Stephen Curry", "team_id": "gsw", "team_name": "Golden State Warriors", "position": "G", "stats_json": {"points": 28.7, "assists": 6.2, "rebounds": 4.8}},
-            {"id": "nikola-jokic", "name": "Nikola Jokic", "team_id": "den", "team_name": "Denver Nuggets", "position": "C", "stats_json": {"points": 26.1, "assists": 9.0, "rebounds": 12.4}},
-            {"id": "shai-gilgeous-alexander", "name": "Shai Gilgeous-Alexander", "team_id": "okc", "team_name": "Oklahoma City Thunder", "position": "G", "stats_json": {"points": 31.0, "assists": 6.5, "rebounds": 5.7}},
-        ]
-
-    def market_seeds(self) -> list[dict]:
-        today = self.now
-        return [
-            {
-                "slug": "lakers-warriors-who-wins",
-                "title": "Lakers vs Warriors - Who Wins?",
-                "description": "Predict the winner based on form, injuries, and matchup efficiency.",
-                "category": "Game Outcome",
-                "market_type": "game_outcome",
-                "oracle_source": "NBA Stats API + official box score confirmation",
-                "expiry_at": today + timedelta(hours=7),
-                "yes_probability": 0.58,
-                "ai_confidence": 0.73,
-                "volume": 184500,
-                "liquidity": 92500,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "Los Angeles Lakers vs Golden State Warriors",
-                    "primary_subject": "Los Angeles Lakers",
-                    "yes_label": "Lakers",
-                    "no_label": "Warriors",
-                    "probability_points": [0.51, 0.53, 0.55, 0.57, 0.58],
-                    "team_form": {
-                        "home_team": "Los Angeles Lakers",
-                        "away_team": "Golden State Warriors",
-                        "home_record_last_5": "4-1",
-                        "away_record_last_5": "2-3",
-                        "home_off_rating": 118.7,
-                        "away_off_rating": 114.1,
-                        "home_def_rating": 111.2,
-                        "away_def_rating": 115.9,
-                    },
-                    "player_context": {
-                        "headline": "LeBron James",
-                        "trend": "Lakers created a paint advantage in 4 of the last 5 games.",
-                    },
-                },
-            },
-            {
-                "slug": "celtics-bucks-who-wins",
-                "title": "Celtics vs Bucks - Who Wins?",
-                "description": "Game outcome market with pace, rebounding, and shot-quality context.",
-                "category": "Game Outcome",
-                "market_type": "game_outcome",
-                "oracle_source": "NBA Stats API + official box score confirmation",
-                "expiry_at": today + timedelta(hours=10),
-                "yes_probability": 0.61,
-                "ai_confidence": 0.76,
-                "volume": 203200,
-                "liquidity": 108300,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "Boston Celtics vs Milwaukee Bucks",
-                    "primary_subject": "Boston Celtics",
-                    "yes_label": "Celtics",
-                    "no_label": "Bucks",
-                    "probability_points": [0.55, 0.56, 0.58, 0.6, 0.61],
-                    "team_form": {
-                        "home_team": "Boston Celtics",
-                        "away_team": "Milwaukee Bucks",
-                        "home_record_last_5": "5-0",
-                        "away_record_last_5": "3-2",
-                        "home_off_rating": 121.4,
-                        "away_off_rating": 117.3,
-                        "home_def_rating": 109.8,
-                        "away_def_rating": 113.1,
-                    },
-                    "player_context": {
-                        "headline": "Jayson Tatum",
-                        "trend": "Boston is winning the turnover battle and generating more corner threes.",
-                    },
-                },
-            },
-            {
-                "slug": "knicks-heat-who-wins",
-                "title": "Knicks vs Heat - Who Wins?",
-                "description": "Live game market with in-game score pressure and foul trouble context.",
-                "category": "Game Outcome",
-                "market_type": "game_outcome",
-                "oracle_source": "NBA live game feed + official final score",
-                "expiry_at": today + timedelta(hours=2),
-                "yes_probability": 0.54,
-                "ai_confidence": 0.68,
-                "volume": 146800,
-                "liquidity": 80400,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "New York Knicks vs Miami Heat",
-                    "primary_subject": "New York Knicks",
-                    "yes_label": "Knicks",
-                    "no_label": "Heat",
-                    "probability_points": [0.48, 0.5, 0.49, 0.52, 0.54],
-                    "team_form": {
-                        "home_team": "New York Knicks",
-                        "away_team": "Miami Heat",
-                        "home_record_last_5": "3-2",
-                        "away_record_last_5": "3-2",
-                        "home_off_rating": 115.2,
-                        "away_off_rating": 112.6,
-                        "home_def_rating": 110.9,
-                        "away_def_rating": 111.7,
-                    },
-                    "player_context": {
-                        "headline": "Jalen Brunson",
-                        "trend": "Knicks second-unit shot creation has improved since halftime.",
-                    },
-                },
-            },
-            {
-                "slug": "lebron-james-30-plus-points",
-                "title": "Will LeBron James score 30+ points?",
-                "description": "Player prop powered by usage, matchup rim pressure, and minutes profile.",
-                "category": "Player Performance",
-                "market_type": "player_performance",
-                "oracle_source": "NBA Stats API player tracking + official box score",
-                "expiry_at": today + timedelta(hours=7),
-                "yes_probability": 0.47,
-                "ai_confidence": 0.69,
-                "volume": 112000,
-                "liquidity": 61700,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "Los Angeles Lakers vs Golden State Warriors",
-                    "primary_subject": "LeBron James",
-                    "yes_label": "30+ Points",
-                    "no_label": "Under 30",
-                    "probability_points": [0.42, 0.44, 0.45, 0.46, 0.47],
-                    "player_context": {
-                        "headline": "LeBron James",
-                        "trend": "Usage is up with more half-court reps and weak-side actions.",
-                        "season_average": 27.4,
-                    },
-                    "team_form": {},
-                },
-            },
-            {
-                "slug": "stephen-curry-8-plus-assists",
-                "title": "Will Stephen Curry record 8+ assists?",
-                "description": "Player prop using recent touch time, lineup combinations, and trap rate.",
-                "category": "Player Performance",
-                "market_type": "player_performance",
-                "oracle_source": "NBA Stats API passing dashboard + official box score",
-                "expiry_at": today + timedelta(hours=7),
-                "yes_probability": 0.39,
-                "ai_confidence": 0.65,
-                "volume": 87500,
-                "liquidity": 53200,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "Los Angeles Lakers vs Golden State Warriors",
-                    "primary_subject": "Stephen Curry",
-                    "yes_label": "8+ Assists",
-                    "no_label": "Under 8",
-                    "probability_points": [0.34, 0.35, 0.36, 0.38, 0.39],
-                    "player_context": {
-                        "headline": "Stephen Curry",
-                        "trend": "Potential minute cap trims assist ceiling even if trap volume rises.",
-                        "season_average": 6.2,
-                    },
-                    "team_form": {},
-                },
-            },
-            {
-                "slug": "nikola-jokic-12-plus-rebounds",
-                "title": "Will Nikola Jokic grab 12+ rebounds?",
-                "description": "Player prop driven by opponent shot profile and contested board share.",
-                "category": "Player Performance",
-                "market_type": "player_performance",
-                "oracle_source": "NBA rebounding tracking + official box score",
-                "expiry_at": today + timedelta(days=1, hours=1),
-                "yes_probability": 0.63,
-                "ai_confidence": 0.79,
-                "volume": 97300,
-                "liquidity": 58800,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "Denver Nuggets vs Minnesota Timberwolves",
-                    "primary_subject": "Nikola Jokic",
-                    "yes_label": "12+ Rebounds",
-                    "no_label": "Under 12",
-                    "probability_points": [0.57, 0.59, 0.6, 0.62, 0.63],
-                    "player_context": {
-                        "headline": "Nikola Jokic",
-                        "trend": "Frontcourt rebounding advantage remains intact against current lineups.",
-                        "season_average": 12.4,
-                    },
-                    "team_form": {},
-                },
-            },
-            {
-                "slug": "nuggets-reach-finals",
-                "title": "Will the Nuggets reach the Finals?",
-                "description": "Season market using playoff path, rotation health, and efficiency trend.",
-                "category": "Season Market",
-                "market_type": "season_event",
-                "oracle_source": "NBA standings + postseason resolution rules",
-                "expiry_at": today + timedelta(days=52),
-                "yes_probability": 0.44,
-                "ai_confidence": 0.71,
-                "volume": 261400,
-                "liquidity": 143900,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "Denver Nuggets season outlook",
-                    "primary_subject": "Denver Nuggets",
-                    "yes_label": "Reach Finals",
-                    "no_label": "Miss Finals",
-                    "probability_points": [0.38, 0.39, 0.41, 0.43, 0.44],
-                    "player_context": {
-                        "headline": "Nikola Jokic",
-                        "trend": "Half-court efficiency remains elite, but bracket path is demanding.",
-                    },
-                    "team_form": {
-                        "home_team": "Denver Nuggets",
-                        "conference_seed_projection": 2,
-                    },
-                },
-            },
-            {
-                "slug": "shai-gilgeous-alexander-wins-mvp",
-                "title": "Will Shai Gilgeous-Alexander win MVP?",
-                "description": "Season market balancing award narrative, team record, and efficiency profile.",
-                "category": "Season Market",
-                "market_type": "season_event",
-                "oracle_source": "NBA awards resolution + official announcement",
-                "expiry_at": today + timedelta(days=38),
-                "yes_probability": 0.36,
-                "ai_confidence": 0.67,
-                "volume": 217800,
-                "liquidity": 124600,
-                "metadata_json": {
-                    "sport": "NBA",
-                    "league": "NBA",
-                    "matchup": "NBA MVP race",
-                    "primary_subject": "Shai Gilgeous-Alexander",
-                    "yes_label": "Wins MVP",
-                    "no_label": "Does Not Win",
-                    "probability_points": [0.29, 0.31, 0.33, 0.35, 0.36],
-                    "player_context": {
-                        "headline": "Shai Gilgeous-Alexander",
-                        "trend": "Efficiency and team success keep him in the top tier of the race.",
-                    },
-                    "team_form": {},
-                },
-            },
-        ]
+        players: list[dict] = []
+        seen_ids: set[str] = set()
+        for game in self.live_games():
+            summary = self.provider.fetch_summary(game["game_id"])
+            payload = summary.data if isinstance(summary.data, dict) else {}
+            boxscore = payload.get("boxscore") or {}
+            for team_group in boxscore.get("players", []):
+                team = team_group.get("team") or {}
+                team_id = str(team.get("id") or "")
+                team_name = team.get("displayName") or team.get("name") or ""
+                for athlete_group in team_group.get("statistics", []):
+                    for athlete in athlete_group.get("athletes", []):
+                        athlete_info = athlete.get("athlete") or {}
+                        player_id = str(athlete_info.get("id") or "")
+                        if not player_id or player_id in seen_ids:
+                            continue
+                        seen_ids.add(player_id)
+                        players.append(
+                            {
+                                "id": player_id,
+                                "name": athlete_info.get("displayName") or athlete_info.get("fullName") or "",
+                                "team_id": team_id,
+                                "team_name": team_name,
+                                "position": (athlete_info.get("position") or {}).get("abbreviation") or "",
+                                "stats_json": self._stat_map(
+                                    athlete_group.get("labels") or [],
+                                    athlete.get("stats") or [],
+                                ),
+                            }
+                        )
+        return players or seeded_players()
 
     def live_games(self) -> list[dict]:
-        base = self.now
-        return [
-            {
-                "game_id": "nyk-mia-live",
-                "id": "nyk-mia-live",
-                "matchup": "Knicks vs Heat",
-                "status": "Q3 04:12",
-                "tipoff_time": base - timedelta(hours=1, minutes=10),
-                "start_time": base - timedelta(hours=1, minutes=10),
-                "team_a": "New York Knicks",
-                "team_b": "Miami Heat",
-                "team_a_id": "nyk",
-                "team_b_id": "mia",
-                "home_team": "New York Knicks",
-                "away_team": "Miami Heat",
-                "home_score": 82,
-                "away_score": 78,
-                "win_probability_home": 0.58,
-                "pace": 97.8,
-                "headline": "Knicks bench unit swinging shot quality in transition.",
-            },
-            {
-                "game_id": "lal-gsw-upcoming",
-                "id": "lal-gsw-upcoming",
-                "matchup": "Lakers vs Warriors",
-                "status": "Pre-game",
-                "tipoff_time": base + timedelta(hours=6, minutes=30),
-                "start_time": base + timedelta(hours=6, minutes=30),
-                "team_a": "Los Angeles Lakers",
-                "team_b": "Golden State Warriors",
-                "team_a_id": "lal",
-                "team_b_id": "gsw",
-                "home_team": "Los Angeles Lakers",
-                "away_team": "Golden State Warriors",
-                "home_score": 0,
-                "away_score": 0,
-                "win_probability_home": 0.58,
-                "pace": 100.4,
-                "headline": "Warriors injury watch is the largest late-moving variable.",
-            },
-            {
-                "game_id": "bos-mil-upcoming",
-                "id": "bos-mil-upcoming",
-                "matchup": "Celtics vs Bucks",
-                "status": "Pre-game",
-                "tipoff_time": base + timedelta(hours=9, minutes=15),
-                "start_time": base + timedelta(hours=9, minutes=15),
-                "team_a": "Boston Celtics",
-                "team_b": "Milwaukee Bucks",
-                "team_a_id": "bos",
-                "team_b_id": "mil",
-                "home_team": "Boston Celtics",
-                "away_team": "Milwaukee Bucks",
-                "home_score": 0,
-                "away_score": 0,
-                "win_probability_home": 0.61,
-                "pace": 99.1,
-                "headline": "Boston owns the matchup edge in spacing and weak-side defense.",
-            },
-        ]
+        result = self.provider.fetch_scoreboard()
+        scoreboard = result.data if isinstance(result.data, dict) else {}
+        events = scoreboard.get("events") or []
+        games = [self._map_event(event) for event in events]
+        return [game for game in games if game is not None]
 
     def game_by_id(self, game_id: str) -> dict | None:
-        for game in self.live_games():
-            if game["game_id"] == game_id or game["id"] == game_id:
-                return game
-        return None
+        summary = self.provider.fetch_summary(game_id)
+        if isinstance(summary.data, dict) and summary.data.get("header"):
+            event = {
+                "id": game_id,
+                "name": summary.data.get("header", {}).get("competitions", [{}])[0].get("name"),
+                "date": summary.data.get("header", {}).get("competitions", [{}])[0].get("date"),
+                "status": summary.data.get("header", {}).get("competitions", [{}])[0].get("status"),
+                "competitions": summary.data.get("header", {}).get("competitions") or [],
+            }
+            mapped = self._map_event(event, summary.data)
+            if mapped is not None:
+                return mapped
+        return next((game for game in self.live_games() if game["game_id"] == game_id), None)
+
+    def _map_event(self, event: dict, summary: dict | None = None) -> dict | None:
+        competition = (event.get("competitions") or [{}])[0]
+        competitors = competition.get("competitors") or []
+        home = next((row for row in competitors if row.get("homeAway") == "home"), None)
+        away = next((row for row in competitors if row.get("homeAway") == "away"), None)
+        if home is None or away is None:
+            return None
+        status = (competition.get("status") or event.get("status") or {}).get("type") or {}
+        situation = competition.get("situation") or {}
+        home_team = home.get("team") or {}
+        away_team = away.get("team") or {}
+        tipoff = self._parse_datetime(competition.get("date") or event.get("date"))
+        headline = (
+            (situation.get("lastPlay") or {}).get("text")
+            or (summary or {}).get("headline")
+            or status.get("detail")
+            or "No live data available"
+        )
+        return {
+            "game_id": str(event.get("id") or ""),
+            "id": str(event.get("id") or ""),
+            "matchup": event.get("name") or f"{away_team.get('shortDisplayName', 'Away')} vs {home_team.get('shortDisplayName', 'Home')}",
+            "status": status.get("shortDetail") or status.get("detail") or "No live data available",
+            "tipoff_time": tipoff,
+            "start_time": tipoff,
+            "team_a": home_team.get("displayName") or home_team.get("name") or "",
+            "team_b": away_team.get("displayName") or away_team.get("name") or "",
+            "team_a_id": str(home_team.get("id") or ""),
+            "team_b_id": str(away_team.get("id") or ""),
+            "home_team": home_team.get("displayName") or home_team.get("name") or "",
+            "away_team": away_team.get("displayName") or away_team.get("name") or "",
+            "home_score": int(float(home.get("score") or 0)),
+            "away_score": int(float(away.get("score") or 0)),
+            "win_probability_home": self._home_win_probability(competition, home, away, status),
+            "pace": self._pace_estimate(competition, home, away),
+            "headline": headline,
+        }
+
+    def _home_win_probability(self, competition: dict, home: dict, away: dict, status: dict) -> float:
+        probabilities = competition.get("probabilities") or []
+        if probabilities:
+            source = probabilities[0]
+            for key in ("homeWinPercentage", "homeWinPct", "homeTeamPercentage"):
+                value = source.get(key)
+                if value is not None:
+                    return self._normalize_probability(value)
+
+        home_score = int(float(home.get("score") or 0))
+        away_score = int(float(away.get("score") or 0))
+        if status.get("completed"):
+            return 1.0 if home_score > away_score else 0.0
+
+        differential = home_score - away_score
+        clock_text = status.get("shortDetail") or ""
+        progress_bonus = 0.0
+        if "Q4" in clock_text or "OT" in clock_text:
+            progress_bonus = 0.12
+        elif "Q3" in clock_text:
+            progress_bonus = 0.08
+        elif "Q2" in clock_text:
+            progress_bonus = 0.04
+        return max(0.01, min(0.99, 0.5 + (differential * 0.018) + progress_bonus))
+
+    def _pace_estimate(self, competition: dict, home: dict, away: dict) -> float:
+        total_score = int(float(home.get("score") or 0)) + int(float(away.get("score") or 0))
+        detail = ((competition.get("status") or {}).get("type") or {}).get("shortDetail") or ""
+        if "Q4" in detail or "OT" in detail:
+            divisor = 1.0
+        elif "Q3" in detail:
+            divisor = 0.75
+        elif "Q2" in detail:
+            divisor = 0.5
+        elif "Q1" in detail:
+            divisor = 0.25
+        else:
+            return 0.0
+        return round(total_score / max(divisor, 0.25), 1)
+
+    def _stat_map(self, labels: list[str], values: list[str]) -> dict:
+        stats: dict[str, str] = {}
+        for index, label in enumerate(labels):
+            if index >= len(values):
+                break
+            stats[label] = values[index]
+        return stats
+
+    def _parse_datetime(self, value: str | None) -> datetime:
+        if not value:
+            return datetime.now(UTC)
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return datetime.now(UTC)
+        return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+    def _normalize_probability(self, value) -> float:
+        numeric = float(value)
+        return round(numeric / 100 if numeric > 1 else numeric, 4)
+
+    def _last_ten(self, stats_map: dict) -> str:
+        value = stats_map.get("lastTenGames")
+        if isinstance(value, str) and "-" in value:
+            return value
+        return ""

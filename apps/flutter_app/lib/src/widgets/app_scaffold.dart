@@ -55,9 +55,6 @@ class AppScaffold extends ConsumerWidget {
     final balances = ref.watch(walletBalancesProvider);
     final searchQuery = ref.watch(searchQueryProvider);
 
-    ref.read(authSessionProvider.notifier).restore();
-    ref.read(walletSessionProvider.notifier).restore();
-
     ref.listen(txUpdatesProvider, (previous, next) {
       next.whenData((update) {
         if (!context.mounted) return;
@@ -67,7 +64,8 @@ class AppScaffold extends ConsumerWidget {
       });
     });
 
-    if (!auth.isAuthenticated &&
+    if (auth.restored &&
+        !auth.isAuthenticated &&
         path != '/login' &&
         path != '/signup' &&
         path != '/') {

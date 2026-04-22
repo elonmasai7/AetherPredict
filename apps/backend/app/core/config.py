@@ -15,7 +15,12 @@ class Settings(BaseSettings):
     jwt_refresh_expire_days: int = 14
     ai_service_url: str = "http://localhost:8010"
     coingecko_api_url: str = "https://api.coingecko.com/api/v3"
-    market_poll_interval_seconds: int = 30
+    espn_scoreboard_url: str = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+    espn_nba_news_rss_url: str = "https://www.espn.com/espn/rss/nba/news"
+    sports_rss_urls: list[str] = []
+    live_cache_ttl_seconds: int = 10
+    news_cache_ttl_seconds: int = 60
+    market_poll_interval_seconds: int = 10
     price_alert_threshold_pct: float = 5.0
     hashkey_rpc_url: str = ""
     hashkey_rpc_fallbacks: list[str] = []
@@ -37,6 +42,8 @@ class Settings(BaseSettings):
     copy_websocket_channel: str = "aetherpredict:copy_updates"
     hashkey_explorer_url: str = "https://explorer.hashkeychain.example"
     websocket_channel: str = "aetherpredict:market_updates"
+    games_websocket_channel: str = "aetherpredict:game_updates"
+    activity_websocket_channel: str = "aetherpredict:activity_updates"
     walletconnect_project_id: str = ""
     cors_allowed_origins: list[str] = []
     api_docs_enabled: bool | None = None
@@ -63,6 +70,7 @@ class Settings(BaseSettings):
         "cors_allowed_origins",
         "vault_auto_execute_default_slugs",
         "vault_auto_execute_allowlist_manager_roles",
+        "sports_rss_urls",
         mode="before",
     )
     @classmethod

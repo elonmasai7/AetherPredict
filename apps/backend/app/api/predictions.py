@@ -17,9 +17,11 @@ def predict(
     db: Session = Depends(get_db),
     user=Depends(get_optional_user),
 ) -> PredictionResponse:
+    wallet_address = payload.wallet_address or (user.wallet_address if user else None)
     if user is None:
-        wallet = payload.wallet_address or f"user-{payload.user_id or 'demo'}"
-        user = get_or_create_wallet_user(db, wallet)
+        if not wallet_address:
+            raise HTTPException(status_code=401, detail="wallet_address required")
+        user = get_or_create_wallet_user(db, wallet_address)
     market = db.scalar(select(Market).where(Market.id == payload.market_id))
     if market is None:
         raise HTTPException(status_code=404, detail="Market not found")
@@ -31,7 +33,7 @@ def predict(
         side=choice,
         collateral_amount=payload.amount,
         price=price,
-        wallet_address=payload.wallet_address or user.wallet_address or "demo-wallet",
+        wallet_address=wallet_address,
         liquidity_preview={"confidence": payload.confidence},
     )
     return PredictionResponse(
@@ -42,7 +44,7 @@ def predict(
         amount=trade.collateral_amount,
         entry_price=trade.price,
         status=trade.status,
-        tx_status="simulated" if trade.signed_payload is None else "broadcasting",
+        tx_status=trade.status.lower(),
     )
 
 
